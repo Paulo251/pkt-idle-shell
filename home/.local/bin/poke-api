@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""poke-api — baixa da PokeAPI o que o PokéIdle precisa (cache em ~/.cache/pokeidle).
+
+    poke-api time          golpes dos pokémon do time e da caixa + sprites dos itens
+    poke-api pokemon 25 6  golpes dessas espécies (e os dados de cada golpe)
+    poke-api itens         sprites de todos os itens do catálogo
+    poke-api tudo          as 1025 espécies (alguns minutos; roda em segundo plano)
+
+Nunca baixa de novo o que já está em cache.
+"""
+from __future__ import annotations
+
+import json
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+sys.path.insert(0, str(Path.home() / ".local" / "lib"))
+from pokeidle import api, itens  # noqa: E402
+
+SAVE = Path.home() / ".config" / "poke-equipo" / "equipo.json"
+
+
+def especie(num: int) -> int:
+    p = api.pokemon(num)
+    if not p:
+        print(f"  #{num}: sem rede ou não encontrado")
+        return 0
+    nomes = sorted({n for _, n in p["nivel"]} | set(p["tm"]))
+    with ThreadPoolExecutor(8) as ex:
+        list(ex.map(api.golpe, nomes))
+    return len(nomes)
+
+
+def cmd_pokemon(nums: list[int]) -> None:
+    for n in nums:
+        print(f"#{n}: {especie(n)} golpes")
+
+
+def cmd_itens() -> None:
+    with ThreadPoolExecutor(8) as ex:
+        ok = sum(1 for s in ex.map(api.sprite_item, list(itens.CATALOGO) + ["tm-normal"]) if s)
+    print(f"sprites de itens: {ok}")
+
+
+def cmd_time() -> None:
+    try:
+        d = json.loads(SAVE.read_text())
+    except (OSError, ValueError):
+        d = {}
+    nums = sorted({m["num"] for m in d.get("equipo", []) + d.get("caja", [])})
+    cmd_pokemon(nums)
+    cmd_itens()
+
+
+def cmd_tudo() -> None:
+    def um(n):
+        p = api.pokemon(n)
+        return n if p else None
+    with ThreadPoolExecutor(6) as ex:
+        feitos = [n for n in ex.map(um, range(1, 1026)) if n]
+    print(f"espécies em cache: {len(feitos)}")
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print(__doc__)
+        return 1
+    cmd = sys.argv[1]
+    if cmd == "time":
+        cmd_time()
+    elif cmd == "itens":
+        cmd_itens()
+    elif cmd == "tudo":
+        cmd_tudo()
+    elif cmd == "pokemon":
+        cmd_pokemon([int(x) for x in sys.argv[2:] if x.isdigit()])
+    else:
+        print(__doc__)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,28 @@
+{
+  "classes": [
+    {"id": "montanhista", "nome": "Montanhista", "sprite": ["hiker"], "tipos": ["rock", "ground"]},
+    {"id": "nadadora", "nome": "Nadadora", "sprite": ["swimmerf", "swimmer"], "tipos": ["water"]},
+    {"id": "pescador", "nome": "Pescador", "sprite": ["fisherman"], "tipos": ["water"]},
+    {"id": "inseto", "nome": "Caçador de Insetos", "sprite": ["bugcatcher"], "tipos": ["bug"]},
+    {"id": "faixa", "nome": "Faixa Preta", "sprite": ["blackbelt"], "tipos": ["fighting"]},
+    {"id": "lutadora", "nome": "Lutadora", "sprite": ["battlegirl"], "tipos": ["fighting"]},
+    {"id": "aves", "nome": "Criador de Aves", "sprite": ["birdkeeper"], "tipos": ["flying"]},
+    {"id": "campista", "nome": "Campista", "sprite": ["camper"], "tipos": ["grass", "normal"]},
+    {"id": "piquenique", "nome": "Piqueniqueira", "sprite": ["picnicker"], "tipos": ["grass", "fairy"]},
+    {"id": "cientista", "nome": "Cientista", "sprite": ["scientist"], "tipos": ["electric", "steel", "poison"]},
+    {"id": "marinheiro", "nome": "Marinheiro", "sprite": ["sailor"], "tipos": ["water", "fighting"]},
+    {"id": "operario", "nome": "Operário", "sprite": ["worker"], "tipos": ["steel", "ground"]},
+    {"id": "dama", "nome": "Dama", "sprite": ["lady"], "tipos": ["normal", "fairy"]},
+    {"id": "cavalheiro", "nome": "Cavalheiro", "sprite": ["gentleman"], "tipos": ["normal", "fire"]},
+    {"id": "jovem", "nome": "Jovem", "sprite": ["youngster"], "tipos": ["normal", "bug"]},
+    {"id": "garota", "nome": "Garota", "sprite": ["lass"], "tipos": ["normal", "grass"]},
+    {"id": "as", "nome": "Treinador Ás", "sprite": ["acetrainer"], "tipos": []},
+    {"id": "asf", "nome": "Treinadora Ás", "sprite": ["acetrainerf"], "tipos": []},
+    {"id": "veterano", "nome": "Veterano", "sprite": ["veteran"], "tipos": []}
+  ],
+  "nomes": ["Caio", "Bia", "Rafa", "Lia", "Nico", "Duda", "Téo", "Malu", "Davi", "Nina", "Igor", "Clara", "Otto", "Vera", "Enzo", "Luna", "Hugo", "Iris", "Beto", "Tati", "Ravi", "Sofia", "Gael", "Alice"],
+  "chefes": [
+    {"vitoria": 21, "nome": "Ás da Torre Valéria", "sprite": ["acetrainerf"]},
+    {"vitoria": 49, "nome": "Mestre da Torre Otávio", "sprite": ["veteran"]}
+  ]
+}

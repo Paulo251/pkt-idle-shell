@@ -1,0 +1,32 @@
+[Unit]
+# Quickshell (bar + notch + panels) supervised by systemd.
+#
+# It used to live in hyprland.conf's 'exec-once = qs', in other words as a loose
+# child of the compositor: if qs died, NOBODY brought it back and you were left
+# without bar or notch until you relaunched it by hand. It really happened on
+# 2026-08-05 at 15:37:11 (SIGSEGV in the QML type loader), and on the way out it
+# dropped the notifications D-Bus name, which swaync then took for good.
+#
+# --no-duplicate makes a 'qs' launched by hand exit on its own if an instance
+# is already running, so this unit and the habit of relaunching from the
+# terminal live together without ending up with two bars.
+Description=Quickshell: bar, notch and panels
+Documentation=https://github.com/Paulo251/pkt-idle-shell
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+# If the QML config is broken, qs exits instantly: without this limit systemd
+# would retry in a tight loop. Five attempts in a minute and it gives up.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/qs --no-duplicate
+Restart=on-failure
+RestartSec=1s
+Slice=session.slice
+
+[Install]
+WantedBy=graphical-session.target

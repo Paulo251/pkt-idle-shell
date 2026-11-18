@@ -1,0 +1,16 @@
+# gerado em cada máquina
+home/.config/hypr/config/monitors.lua
+home/.config/hypr/efectos.lua
+
+# Python e Qt
+__pycache__/
+*.pyc
+*.qmlc
+*.jsc
+
+# editores e sistema
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store

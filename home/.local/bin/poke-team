@@ -1,0 +1,2651 @@
+#!/usr/bin/env python3
+"""poke-team — a team of six pokémon that levels up with your commits.
+
+The idea comes from Impasto's pets (github.com/andreumassanet/impasto,
+GPL-3.0): creatures that live in the bar and level up while you look after
+them. Here experience does not come from feeding them, it comes from WORKING:
+every contribution GitHub logs for you hands out experience across the team.
+
+    poke-team estado            the whole team in JSON (read by the notch)
+    poke-team ver               the same, human-readable
+    poke-team sync              checks GitHub and hands out whatever was earned
+    poke-team add <pokemon>     puts it in the team (up to six)
+    poke-team quitar <puesto>   takes it out
+    poke-team mote <puesto> <x> renames it
+    poke-team lider <puesto>    puts it first
+    poke-team mover <de> <a>    moves it to another slot (reorder)
+    poke-team evolucionar <p> [a <pokemon>]   forces the pending evolution
+    poke-team guardar <puesto>  sends it to the box (losing nothing)
+    poke-team sacar <indice>    brings it back to the team
+    poke-team repartir on|off   experience in equal shares, like the item
+    poke-team pasear on|off     the leader walks about the desktop
+
+HOW EXPERIENCE IS COUNTED, which is the only delicate part: GitHub does not
+say "you made a new commit", it says how many contributions you have each day.
+So it stores how many had already been counted (`contadas`) and on every sync
+it adds up the grid again from the day you started; the difference is what
+gets handed out. Adding up the WHOLE grid and not just today's is what makes
+sure nothing is lost if you go days without opening the desktop, and that
+nothing counts twice if you sync five times in a row.
+
+On install it does NOT give away the whole year's experience: the starting
+line is the day you set up the team. What came before you already worked
+without pokémon.
+"""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import random
+import subprocess
+import sys
+from contextlib import contextmanager
+from datetime import date, datetime, timedelta
+
+# PokéIdle: status, golpes, itens, Pokécenter e regras de evolução (~/.local/lib/pokeidle)
+sys.path.insert(0, os.path.join(os.path.expanduser("~"), ".local", "lib"))
+from pokeidle import api as pk_api, centro, evolucao, golpes, itens, stats  # noqa: E402
+from pokeidle import batalha as motor, ligas, modos  # noqa: E402
+from pathlib import Path
+
+
+def tr(es, en, it):
+    try:
+        import json
+        from pathlib import Path
+        with (Path.home() / ".config/quickshell-rice.json").open(encoding="utf-8") as f:
+            lang = json.load(f).get("language")
+        return en if lang == "en" else (it if lang == "it" else es)
+    except (OSError, ValueError, AttributeError):
+        return es
+
+
+HOME = Path.home()
+ESTADO = HOME / ".config" / "poke-equipo" / "equipo.json"
+CERROJO = HOME / ".config" / "poke-equipo" / ".equipo.lock"
+# What poke-leader-shimeji leaves written when it fails to take the leader out
+# for a walk. The panel launches it with execDetached, which collects neither
+# output nor exit code, so this is the only path by which the news reaches the
+# screen.
+PASEA_FALLO = HOME / ".config" / "poke-equipo" / "pasea-fallo"
+EVOLUCIONES = HOME / ".cache" / "pokepalette" / "evoluciones.json"
+NOMBRES = HOME / ".cache" / "pokepalette" / "nombres.tsv"
+NOMBRES_ES = HOME / ".cache" / "pokepalette" / "nombres-es.tsv"
+DIR_GIF = HOME / ".cache" / "pokeanim"
+DIR_PNG = HOME / ".cache" / "pokeart"
+GITHUB = HOME / ".config" / "quickshell" / "scripts" / "github-stats.py"
+
+TAMANO = 6              # a pokémon team is six, not one more
+XP_POR_APORTE = 12      # what each GitHub contribution is worth
+PARTE_LIDER = 0.6       # the first one takes this; the rest share what is left
+NIVEL_MAX = 100         # like the games: at 100 the counter stops
+SHINY_UNO_DE = 512       # PokéIdle: 1 em 512 (raro, mas dá para ver alguns por mês)
+RACHA_TOPE = 10         # streak days that end up DOUBLING the experience
+DIR_SHINY = HOME / ".cache" / "pokeshiny"
+TIPOS = HOME / ".cache" / "pokepalette" / "tipos.json"
+
+# The games' 25 natures. There are no battle stats here, so each one is
+# translated into the only thing that exists in this system: how quickly that
+# individual learns. It follows the stat it RAISES, with the obvious logic --
+# Speed ones learn faster, Defence ones take their time. That way two Pikachu
+# are not the same Pikachu, which is what having a nature is about.
+NATURALEZAS = {
+    # name: (what it raises, experience multiplier)
+    # The games' 25, with their Spanish names. Five are neutral and the other
+    # twenty raise one stat and lower another; here the raised one is
+    # translated into the only thing that exists in this system.
+    "Fuerte": ("nada", 1.00), "Dócil": ("nada", 1.00), "Seria": ("nada", 1.00),
+    "Tímida": ("nada", 1.00), "Rara": ("nada", 1.00),
+
+    "Miedosa": ("Velocidad", 1.10), "Alegre": ("Velocidad", 1.10),
+    "Ingenua": ("Velocidad", 1.10), "Alocada": ("Velocidad", 1.10),
+
+    "Huraña": ("Ataque", 1.05), "Audaz": ("Ataque", 1.05),
+    "Pícara": ("Ataque", 1.05), "Agitada": ("Ataque", 1.05),
+
+    "Modesta": ("At. especial", 1.05), "Afable": ("At. especial", 1.05),
+    "Mansa": ("At. especial", 1.05), "Pirata": ("At. especial", 1.05),
+
+    "Osada": ("Defensa", 0.95), "Firme": ("Defensa", 0.95),
+    "Activa": ("Defensa", 0.95), "Floja": ("Defensa", 0.95),
+
+    "Calmada": ("Def. especial", 0.95), "Amable": ("Def. especial", 0.95),
+    "Grosera": ("Def. especial", 0.95), "Cauta": ("Def. especial", 0.95),
+}
+
+# The eight Kanto badges, by contributions accumulated since you set up the
+# team. At a pace of ~16 a day, the last one falls around the fourth month: far
+# off, but reachable. They are the only goal in this system that does not
+# depend on the team.
+MEDALLAS = [
+    (25, "Roca"), (75, "Cascada"), (150, "Trueno"), (300, "Arcoíris"),
+    (500, "Alma"), (800, "Pantano"), (1200, "Volcán"), (2000, "Tierra"),
+]
+
+# Trainer rank by the team's TOTAL level. It gives an at-a-glance reading ("I am
+# at As" (Ace)) that six loose numbers do not.
+RANGOS = [(0, "Novato"), (20, "Entrenador"), (60, "As"), (150, "Élite"),
+          (300, "Alto Mando"), (500, "Campeón")]
+URL_SHINY = ("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/"
+             "pokemon/versions/generation-v/black-white/animated/shiny")
+
+
+# --- levels ------------------------------------------------------------------
+# Same curve as Impasto's pets: linear and shallow, so progress shows early.
+# Going from 1 to 2 costs 60 -> five contributions.
+def umbral(nivel: int) -> int:
+    return 40 + 20 * nivel
+
+
+# --- auxiliary data ----------------------------------------------------------
+def nombres() -> dict[int, str]:
+    fuera: dict[int, str] = {}
+    if NOMBRES.exists():
+        for linea in NOMBRES.read_text().splitlines():
+            num, _, nom = linea.partition("\t")
+            if num.isdigit() and nom:
+                fuera[int(num)] = nom
+    return fuera
+
+
+def nombres_es() -> dict[int, str]:
+    """Each one's Spanish name, which is the one shown. poke-names downloads
+    it; if it is missing, it carries on with the English and that is that.
+    Mind, it does NOT replace nombres.tsv: that is still the one you type to
+    search and the one the subcommands match, because it is what every other
+    piece uses."""
+    fuera: dict[int, str] = {}
+    if NOMBRES_ES.exists():
+        for linea in NOMBRES_ES.read_text().splitlines():
+            num, _, nom = linea.partition("\t")
+            if num.isdigit() and nom:
+                fuera[int(num)] = nom
+    return fuera
+
+
+def tipos_de() -> dict:
+    """{'colores':…, 'es':…, 'pokemon':{num:[tipos]}}. If the file is missing
+    it returns empty and the panel simply draws no pills: it is not an error."""
+    try:
+        return json.loads(TIPOS.read_text())
+    except (OSError, ValueError):
+        return {"colores": {}, "es": {}, "pokemon": {}}
+
+
+def rango_de(total: int) -> str:
+    fuera = RANGOS[0][1]
+    for minimo, nombre in RANGOS:
+        if total >= minimo:
+            fuera = nombre
+    return fuera
+
+
+def evoluciones() -> dict[int, list]:
+    if not EVOLUCIONES.exists():
+        return {}
+    crudo = json.loads(EVOLUCIONES.read_text())
+    return {int(k): v for k, v in crudo.items()}
+
+
+def asegurar_shiny(num: int) -> bool:
+    """Downloads the shiny gif if it is missing. Without network it does NOT
+    blow up: adornar() falls back to the normal sprite until someone manages to
+    download it. Only the team's are fetched, never the whole pokédex: it is
+    ~600 KB per creature."""
+    destino = DIR_SHINY / f"{num}.gif"
+    if destino.exists():
+        return True
+    try:
+        import urllib.request
+        DIR_SHINY.mkdir(parents=True, exist_ok=True)
+        pet = urllib.request.Request(f"{URL_SHINY}/{num}.gif",
+                                     headers={"User-Agent": "poke-team/1.0"})
+        with urllib.request.urlopen(pet, timeout=20) as r:
+            datos = r.read()
+        tmp = destino.with_suffix(".gif.tmp")
+        tmp.write_bytes(datos)
+        tmp.replace(destino)
+        return True
+    except Exception:
+        return False
+
+
+def resolver(texto: str) -> tuple[int, str]:
+    """'25' / 'pikachu' / 'pika' -> (25, 'pikachu')."""
+    mapa = nombres()
+    texto = texto.strip().lower()
+    if texto.isdigit():
+        n = int(texto)
+        return n, mapa.get(n, str(n))
+    porn = {v: k for k, v in mapa.items()}
+    if texto in porn:
+        return porn[texto], texto
+    cand = sorted(n for n in porn if n.startswith(texto))
+    if len(cand) == 1:
+        return porn[cand[0]], cand[0]
+    if cand:
+        raise SystemExit(tr(f"'{texto}' es ambiguo: {', '.join(cand[:10])}",
+                            f"'{texto}' is ambiguous: {', '.join(cand[:10])}",
+                            f"'{texto}' è ambiguo: {', '.join(cand[:10])}"))
+    raise SystemExit(tr(f"no conozco a '{texto}'", f"Unknown Pokémon '{texto}'",
+                        f"Pokémon sconosciuto '{texto}'"))
+
+
+# --- state -------------------------------------------------------------------
+def vacio() -> dict:
+    return {"equipo": [], "caja": [],
+            "github": {"login": "", "contadas": 0, "desde": "", "racha": 0},
+            "xp_por_aporte": XP_POR_APORTE,
+            # 'repartir' = the games' item (Exp. Share): experience in equal shares.
+            # 'pasear' = the leader walks about the desktop (poke-leader-shimeji).
+            # 'pasear' desligado: exige wl_shimeji (AUR), que não está instalado.
+            "repartir": False, "pasear": False,
+            # PokéIdle: kit inicial, como sair de casa no jogo. O time começa
+            # vazio e o primeiro pokémon é escolhido na tela de iniciais.
+            "inicial": None, "mochila": {"poke-ball": 5, "potion": 3},
+            "dinheiro": 3000, "ovos": [], "liga": {}}
+
+
+# Os iniciais de cada região (número da Pokédex nacional)
+INICIAIS = [
+    ("Kanto", [1, 4, 7]), ("Johto", [152, 155, 158]), ("Hoenn", [252, 255, 258]),
+    ("Sinnoh", [387, 390, 393]), ("Unova", [495, 498, 501]), ("Kalos", [650, 653, 656]),
+    ("Alola", [722, 725, 728]), ("Galar", [810, 813, 816]), ("Paldea", [906, 909, 912]),
+]
+NIVEL_INICIAL = 5
+
+
+def precisa_inicial(d: dict) -> bool:
+    return not d.get("inicial") and not d.get("equipo")
+
+
+def rescatar() -> dict:
+    """The save does not parse. It is months of play, so it does NOT start from
+    scratch: the broken file is moved aside and the copies in backups/ are
+    tried from newest to oldest. If none is good it exits with a warning,
+    because being without data for a while is much better than having the
+    first click write a blank save over whatever was left."""
+    import time
+    roto = ESTADO.with_name(f"equipo.json.corrupto-{int(time.time())}")
+    try:
+        ESTADO.replace(roto)
+    except OSError:
+        pass
+    for copia in sorted((ESTADO.parent / "backups").glob("equipo-*.json"), reverse=True):
+        try:
+            texto = copia.read_text()
+            d = json.loads(texto)
+        except (OSError, ValueError):
+            continue
+        try:
+            ESTADO.write_text(texto)
+        except OSError:
+            pass
+        print(tr(f"la partida estaba corrupta; restaurada la copia {copia.name} "
+                 f"(la rota se guardo como {roto.name})",
+                 f"The save was corrupt; restored backup {copia.name} (the broken save was kept as {roto.name})",
+                 f"la partita era corrotta; ripristinata la copia {copia.name} "
+                 f"(la partita corrotta è stata salvata come {roto.name})"), file=sys.stderr)
+        return d
+    raise SystemExit(tr(f"la partida no se puede leer y no hay ninguna copia buena. "
+                        f"El fichero roto esta en {roto}",
+                        f"The save cannot be read and there is no valid backup. The broken file is at {roto}",
+                        f"la partita non può essere letta e non c'è nessuna copia valida. Il file rotto è in {roto}"))
+
+
+def leer() -> dict:
+    try:
+        d = json.loads(ESTADO.read_text())
+    except FileNotFoundError:
+        return vacio()          # first time: that is normal, not a problem
+    except (OSError, ValueError):
+        d = rescatar()
+    d.setdefault("equipo", [])
+    d.setdefault("caja", [])
+    d.setdefault("github", {"login": "", "contadas": 0, "desde": ""})
+    # A nature for those coming from a save older than natures. It is drawn
+    # ONCE and saved, so it does not change on every read.
+    tocado = False
+    for m in d["equipo"] + d["caja"]:
+        if not m.get("naturaleza"):
+            m["naturaleza"] = random.choice(list(NATURALEZAS))
+            tocado = True
+        m.setdefault("shiny", False)
+    if tocado:
+        guardar(d)
+    d["github"].setdefault("racha", 0)
+    d.setdefault("xp_por_aporte", XP_POR_APORTE)
+    d.setdefault("repartir", False)
+    d.setdefault("pasear", True)
+    if migrar_pokeidle(d):
+        guardar(d)
+    return d
+
+
+AMIZADE_BASE = 70
+AMIZADE_PARCEIRO = 120      # inicial e quem nasce de ovo
+AMIZADE_MAX = 255
+AMIZADE_CREDITOS = 10       # créditos de tempo para +1 ponto
+AMIZADE_TETO_DIA = 40       # pontos por dia vindos do tempo
+AMIZADE_NIVEL = 2
+AMIZADE_VITORIA = 3
+AMIZADE_INSIGNIA = 5
+AMIZADE_LIGA = 10
+AMIZADE_DESMAIO = -3
+
+
+def amizade_inicial(de: str) -> int:
+    return AMIZADE_PARCEIRO if de in ("inicial", "ovo") else AMIZADE_BASE
+
+
+def migrar_pokeidle(d: dict) -> bool:
+    """PokéIdle: mochila, dinheiro e, por membro, HP e golpes. Roda em toda
+    leitura e só mexe no que falta (idempotente)."""
+    tocado = False
+    motor.normalizar(d.get("batalha"))
+    if "mochila" not in d:
+        bolas = int((d.get("itens") or {}).get("pokebolas", 5))
+        d["mochila"] = {"poke-ball": bolas, "potion": 3}
+        d.pop("itens", None)
+        tocado = True
+    if "dinheiro" not in d:
+        d["dinheiro"] = 1000
+        tocado = True
+    if "liga" not in d:
+        d["liga"] = {}            # fase 2: insígnias por região
+        tocado = True
+    for m in d["equipo"] + d["caja"]:
+        if "hp" not in m:
+            m["hp"] = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+            tocado = True
+        if not m.get("golpes"):
+            g = golpes.iniciais(m["num"], m["nivel"])
+            if g:
+                m["golpes"] = g
+                tocado = True
+        m.setdefault("centro", None)
+        if "amizade" not in m:
+            m["amizade"] = amizade_inicial(m.get("de", ""))
+            tocado = True
+        if "genero" not in m:            # fase 2: ♀/♂ (sorteado uma vez)
+            pk_api.especie(m["num"])
+            m["genero"] = motor.sortear_genero(m["num"])
+            tocado = True
+    return tocado
+
+
+def guardar(d: dict) -> None:
+    ESTADO.parent.mkdir(parents=True, exist_ok=True)
+    # DAILY copy of the save before overwriting it. This is a save file of
+    # months: a silly bug must not take it away. The last 7 are kept.
+    if ESTADO.exists():
+        bdir = ESTADO.parent / "backups"
+        hoy = bdir / f"equipo-{date.today().isoformat()}.json"
+        if not hoy.exists():
+            try:
+                datos = ESTADO.read_bytes()
+                # Make sure what gets archived IS a save: otherwise a half-done
+                # write would be stored as the "good copy" and clobber the day's,
+                # which is exactly the one you would need to rescue.
+                json.loads(datos)
+                bdir.mkdir(parents=True, exist_ok=True)
+                hoy.write_bytes(datos)
+                for viejo in sorted(bdir.glob("equipo-*.json"))[:-7]:
+                    viejo.unlink()
+            except (OSError, ValueError):
+                pass  # carry on without a copy: not saving the game would be worse
+    tmp = ESTADO.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1))
+    tmp.replace(ESTADO)
+
+
+@contextmanager
+def partida():
+    """Lock for the read-modify-save cycle. Without it, an order from the panel
+    and the every-30-minutes sync can overlap: both read the same save, each
+    changes its own bit and the last one to save wipes out the other's change
+    (you lose the pokémon you just added, or the experience just handed out).
+    Same pattern as poke-leader-shimeji's flock, but BLOCKING: here whoever
+    arrives second has to wait their turn, not give up."""
+    CERROJO.parent.mkdir(parents=True, exist_ok=True)
+    with open(CERROJO, "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def tipos_dos_golpes(m: dict) -> set:
+    return {golpes.info(g).get("tipo") for g in m.get("golpes", [])}
+
+
+def evolucoes_prontas(m: dict, ramos: list) -> list:
+    """O que o botão Evoluir pode fazer agora com esse pokémon."""
+    return evolucao.disponiveis(ramos, m["nivel"], int(m.get("amizade", AMIZADE_BASE)),
+                                evolucao.hora_agora(), tipos_dos_golpes(m))
+
+
+def adornar(miembro: dict, mapa: dict[int, str], evos: dict[int, list]) -> dict:
+    # tipos.json is read only once per process and kept attached to the function
+    # itself: adornar() is called once per member and rereading the file six
+    # times in a row makes no sense.
+    if adornar.tipos is None:
+        adornar.tipos = tipos_de()
+    if adornar.es is None:
+        adornar.es = nombres_es()
+    """Adds what the interface needs and is not stored here: sprite paths, the
+    level threshold and whether it has an evolution waiting."""
+    num = miembro["num"]
+    fuera = dict(miembro)
+    fuera["especie"] = mapa.get(num, str(num))
+    # 'especie' stays in English because it is the key the scripts use to talk
+    # to each other; 'especie_es' is what gets DRAWN.
+    if adornar.es is None:
+        adornar.es = nombres_es()
+    fuera["especie_es"] = adornar.es.get(num) or fuera["especie"].capitalize()
+    # The right sprite: shiny if it is one and it has been downloaded; and if
+    # there is no gif (the gen5 animated ones stop at 649), the static artwork
+    # rather than nothing.
+    shiny = bool(miembro.get("shiny"))
+    gif = DIR_SHINY / f"{num}.gif" if shiny else DIR_GIF / f"{num}.gif"
+    if shiny and not gif.exists():
+        asegurar_shiny(num)                    # cheap retry; otherwise, normal
+        if not gif.exists():
+            gif = DIR_GIF / f"{num}.gif"
+    if not gif.exists():
+        gif = DIR_PNG / f"{num}.png"
+    fuera["shiny"] = shiny
+    # 'shiny' says the INDIVIDUAL is shiny -- that is not up for debate, it is 1
+    # in 64 and it is its own. 'shiny_listo' says something else: whether it can
+    # also be SEEN as shiny. Without the gif in ~/.cache/pokeshiny,
+    # poke-leader-shimeji walks it in its normal colours ON PURPOSE (building a
+    # prototype called "...Shiny" with the usual sprite inside would be lying
+    # twice), and the panel, which only looked at the flag, drew the star anyway:
+    # sparkles in the notch and an ordinary-coloured creature on the desktop.
+    # Now both sides know the same thing and each decides how to show it.
+    fuera["shiny_listo"] = shiny and (DIR_SHINY / f"{num}.gif").exists()
+    fuera["gif"] = str(gif)
+    fuera["art"] = str(DIR_PNG / f"{num}.png")
+    if miembro["nivel"] >= NIVEL_MAX:
+        fuera["umbral"] = 0
+        fuera["progreso"] = 1.0
+    else:
+        fuera["umbral"] = umbral(miembro["nivel"])
+        fuera["progreso"] = round(min(1.0, miembro["xp"] / max(1, umbral(miembro["nivel"]))), 3)
+    # type(s) with their colour, for the panel's pill
+    td = adornar.tipos or {}
+    lista = (td.get("pokemon") or {}).get(str(num), [])
+    fuera["tipos"] = [{"id": x,
+                       "es": (td.get("es") or {}).get(x, x),
+                       "color": (td.get("colores") or {}).get(x, "#888888")}
+                      for x in lista]
+    # nature: what it raises and how much it speeds up learning
+    nat = miembro.get("naturaleza") or ""
+    sube, mult = NATURALEZAS.get(nat, ("nada", 1.00))
+    fuera["naturaleza"] = nat
+    fuera["naturaleza_sube"] = sube
+    fuera["naturaleza_mult"] = mult
+
+    ramas = evos.get(num, [])
+    # PokéIdle: "pronto" para nível e amizade; pedra/troca dependem do item
+    listas = evolucoes_prontas(miembro, ramas)
+    fuera["puede_evolucionar"] = bool(listas)
+    fuera["evoluciones"] = [
+        {"a": r["a"], "especie": mapa.get(r["a"], str(r["a"])),
+         "especie_es": adornar.es.get(r["a"]) or mapa.get(r["a"], str(r["a"])).capitalize(),
+         "nivel": evolucao.regra(r)["nivel"] or 0, "como": r["como"],
+         "amizade": evolucao.regra(r)["tipo"] == "amizade",
+         "listo": r in listas}
+        for r in ramas
+    ]
+    fuera.update(info_membro(miembro))
+    return fuera
+
+
+adornar.tipos = None
+adornar.es = None
+
+
+# --- github ------------------------------------------------------------------
+def datos_github() -> dict | None:
+    if not GITHUB.exists():
+        return None
+    try:
+        r = subprocess.run([sys.executable, str(GITHUB)], capture_output=True,
+                           text=True, timeout=60)
+        return json.loads(r.stdout)
+    except Exception:
+        return None
+
+
+def aportes_desde(datos: dict, desde: str) -> int:
+    """Adds up the contribution grid from a date (inclusive).
+
+    It walks the whole grid and not just today: that way it does not matter how
+    many days you have gone without opening the desktop, and syncing ten times
+    in a row counts nothing twice, because it always compares one total against
+    another total.
+    """
+    counts = datos.get("counts") or []
+    inicio = datos.get("start") or ""
+    if not counts or not inicio:
+        return 0
+    try:
+        primer_dia = date.fromisoformat(inicio)
+        corte = date.fromisoformat(desde) if desde else primer_dia
+    except ValueError:
+        return 0
+    total = 0
+    for s, semana in enumerate(counts):
+        for d, valor in enumerate(semana):
+            n = int(valor or 0)
+            # -1 is NOT a negative contribution: it is the padding github-stats.py
+            # puts in (fila += [-1] * (7 - len(fila))) for the days of the current
+            # week that have not happened yet. Adding it subtracted, and since the
+            # week is padded again every night, each midnight a -1 became 0 and
+            # the total went up by itself: six phantom contributions a week. On
+            # Sundays, on top of that, it sank the counter by six in one go and
+            # ate the day's real work.
+            if n <= 0:
+                continue
+            if primer_dia + timedelta(days=s * 7 + d) >= corte:
+                total += n
+    return total
+
+
+def ganhar_xp(m: dict, i: int, gana: int, cap: int, sucesos: list, mapa=None, evos=None) -> None:
+    """XP para UM membro respeitando o level cap: acima dele vai para a reserva
+    do próprio pokémon, que é liberada quando o cap sobe."""
+    teto = min(NIVEL_MAX, cap)
+    if gana <= 0:
+        return
+    if m["nivel"] >= NIVEL_MAX:
+        return
+    if m["nivel"] >= teto:
+        m["xp_reserva"] = int(m.get("xp_reserva", 0)) + gana
+        return
+    m["xp"] += gana
+    while m["nivel"] < teto and m["xp"] >= umbral(m["nivel"]):
+        m["xp"] -= umbral(m["nivel"])
+        subir_nivel(m, 1, i, sucesos, mapa, evos)
+    if m["nivel"] >= NIVEL_MAX:
+        m["xp"] = 0
+    elif m["nivel"] >= teto and m["xp"] >= umbral(m["nivel"]):
+        sobra = m["xp"] - (umbral(m["nivel"]) - 1)
+        m["xp"] -= sobra
+        m["xp_reserva"] = int(m.get("xp_reserva", 0)) + sobra
+        if not m.get("_avisou_cap"):
+            sucesos.append({"tipo": "cap", "puesto": i,
+                            "texto": f"{m.get('mote') or nome_de(m['num'])} chegou ao level cap ({teto}): "
+                                     f"a XP fica guardada até a próxima insígnia."})
+
+
+def ganhar_amizade(m: dict, pontos: int) -> None:
+    """Sobe ou desce a amizade (0 a 255). O Sino Calmante dobra só os ganhos."""
+    if pontos > 0 and m.get("sino"):
+        pontos *= 2
+    m["amizade"] = max(0, min(AMIZADE_MAX, int(m.get("amizade", AMIZADE_BASE)) + pontos))
+
+
+def creditar_amizade(d: dict, creditos: int) -> None:
+    """Tempo vira amizade: 10 créditos = +1 ponto para o time, com teto diário."""
+    a = atividade_de(d)
+    total = int(a.get("amizade_cred", 0)) + creditos
+    pontos, a["amizade_cred"] = divmod(total, AMIZADE_CREDITOS)
+    pontos = min(pontos, max(0, AMIZADE_TETO_DIA - int(a.get("amizade_pts", 0))))
+    if pontos <= 0:
+        return
+    a["amizade_pts"] = int(a.get("amizade_pts", 0)) + pontos
+    for m in d["equipo"]:
+        if not centro.internado(m):
+            ganhar_amizade(m, pontos)
+
+
+def avisar_amizade(d: dict, sucesos: list) -> None:
+    """Avisa uma vez por espécie quando a amizade libera uma evolução."""
+    for i, m in enumerate(d["equipo"]):
+        ramos = [r for r in evoluciones().get(m["num"], []) if evolucao.regra(r)["tipo"] == "amizade"]
+        if not ramos or int(m.get("amizade", 0)) < evolucao.AMIZADE_MIN or m.get("amizade_aviso") == m["num"]:
+            continue
+        m["amizade_aviso"] = m["num"]
+        quem = m.get("mote") or nome_de(m["num"])
+        prontas = evolucoes_prontas(m, ramos)
+        fim = "pode evoluir!" if prontas else f"vai poder evoluir ({evolucao.texto_condicao(ramos[0])})."
+        sucesos.append({"tipo": "amizade", "puesto": i, "texto": f"{quem} confia muito em você e {fim}"})
+
+
+def liberar_reservas(d: dict, sucesos: list) -> None:
+    cap = ligas.cap_xp(d)
+    for i, m in enumerate(d["equipo"]):
+        r = int(m.get("xp_reserva", 0))
+        if r > 0 and m["nivel"] < min(cap, NIVEL_MAX):
+            m["xp_reserva"] = 0
+            ganhar_xp(m, i, r, cap, sucesos)
+
+
+def repartir(equipo: list, xp: int, equitativo: bool, cap: int = NIVEL_MAX) -> list:
+    """Hands out the experience earned. With 'Repartir experiencia' (Exp. Share)
+    on it goes in equal shares, like the games' item; off, the leader takes
+    PARTE_LIDER and the rest split what is left. Not called without a team."""
+    if not equipo or xp <= 0:
+        return []
+    sucesos = []
+    # PokéIdle: quem está no Pokécenter não ganha XP. O XP de líder vai para o
+    # primeiro disponível. A natureza agora mexe nos status, não no XP.
+    ativos = [i for i, m in enumerate(equipo) if not centro.internado(m)]
+    if not ativos:
+        return []
+    partes = {i: 0 for i in range(len(equipo))}
+    if equitativo or len(ativos) == 1:
+        for i in ativos:
+            partes[i] = xp // len(ativos)
+    else:
+        lider = int(round(xp * PARTE_LIDER))
+        porcada = (xp - lider) // (len(ativos) - 1)
+        partes[ativos[0]] = lider
+        for i in ativos[1:]:
+            partes[i] = porcada
+    evos = evoluciones()
+    mapa = nombres()
+    for i, m in enumerate(equipo):
+        ganhar_xp(m, i, partes[i], cap, sucesos, mapa, evos)
+    return sucesos
+
+
+def evoluir(m: dict, novo_num: int) -> None:
+    """Troca a espécie mantendo o dano sofrido (HP perdido continua perdido)."""
+    max_antes = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+    m["num"] = novo_num
+    if m.get("shiny"):
+        asegurar_shiny(m["num"])   # the new form, shiny as well
+    max_depois = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+    if int(m.get("hp", max_antes)) > 0:
+        m["hp"] = max(1, min(max_depois, int(m.get("hp", max_antes)) + max_depois - max_antes))
+    pk_api.pokemon(novo_num)       # golpes da forma nova no cache
+
+
+def subir_nivel(m: dict, vezes: int, i: int, sucesos: list, mapa=None, evos=None) -> None:
+    """Sobe 'vezes' níveis: HP acompanha, avisa golpe novo, evolui se for por nível."""
+    mapa = mapa if mapa is not None else nombres()
+    evos = evos if evos is not None else evoluciones()
+    for _ in range(vezes):
+        if m["nivel"] >= NIVEL_MAX:
+            return
+        max_antes = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+        m["nivel"] += 1
+        ganhar_amizade(m, AMIZADE_NIVEL)
+        max_depois = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+        if int(m.get("hp", max_antes)) > 0:      # derrotado continua derrotado
+            m["hp"] = min(max_depois, int(m.get("hp", max_antes)) + max_depois - max_antes)
+        quem = m.get("mote") or nome_de(m["num"])
+        sucesos.append({"tipo": "nivel", "puesto": i, "quien": quem, "nivel": m["nivel"]})
+        novos = [g for g in golpes.novos_no_nivel(m["num"], m["nivel"]) if g not in m.get("golpes", [])]
+        if novos:
+            nomes = ", ".join(golpes.info(g)["nome"] for g in novos)
+            sucesos.append({"tipo": "golpe_novo", "puesto": i, "golpes": novos,
+                            "texto": f"{quem} pode aprender {nomes}!"})
+            # com vaga sobrando, equipa sozinho (não substitui nenhum)
+            for g in novos:
+                if len(m.setdefault("golpes", [])) < golpes.MAX_GOLPES:
+                    m["golpes"].append(g)
+        # evolução automática SÓ se for por nível e sem escolha (Eevee espera)
+        listas = evolucao.automaticas(evos.get(m["num"], []), m["nivel"])
+        if len(listas) == 1:
+            antes, antes_num = mapa.get(m["num"], ""), m["num"]
+            evoluir(m, listas[0]["a"])
+            sucesos.append({"tipo": "evolucion", "puesto": i,
+                            "de": antes, "a": mapa.get(m["num"], ""),
+                            "de_num": antes_num, "a_num": m["num"],
+                            "shiny": bool(m.get("shiny")), "nivel": m["nivel"]})
+
+
+# =============================================================================
+# NOVA MECÂNICA (paulo, 2026-11): XP por tempo ativo + missões diárias +
+# encontros selvagens + ovos. Substitui o XP do GitHub. A sequência e as
+# insígnias continuam congeladas como estavam (serão refeitas depois).
+#
+# Tudo entra por 'poke-team evento <tipo>', chamado pelo Quickshell:
+#   minuto  --app X   um minuto em que você NÃO estava ocioso (X = app em foco)
+#   musica            uma música tocou até o fim (MPRIS)
+#   app     --app X   um app aberto
+#   wallpaper         o wallpaper foi trocado
+# A saída tem o mesmo formato do antigo 'sync' ({"xp", "sucesos": [...]}), então
+# o shell reaproveita os avisos e a cerimônia de evolução. Os sucessos novos
+# trazem um campo "texto" já em português, pronto para o aviso.
+# =============================================================================
+import time
+
+XP_POR_MINUTO = 2           # ~4 h de uso por dia ≈ 480 XP
+MINUTOS_MAX_DIA = 600       # teto: o PC ligado à toa não vira XP infinito
+POKEBOLAS_INICIO = 5
+MINUTOS_POR_POKEBOLA = 90   # +1 pokébola a cada 90 min ativos
+ENCONTRO_CHANCE = 1 / 45    # por minuto ativo -> 1 ou 2 por hora
+ENCONTRO_DURA = 180         # segundos até o selvagem ir embora
+ENCONTRO_FOGE_FALHA = 0.25  # chance de fugir depois de uma pokébola que falhou
+OVOS_MAX = 3
+OVO_MINUTOS = (60, 120, 240)    # minutos ativos para chocar (comum, raro, muito raro)
+JOGO = ("steam_app", "gamescope", "steam_proton", "lutris", "heroic", "minecraft",
+        "retroarch", ".exe")
+RANK_GIF = HOME / ".cache" / "pokepalette" / "rank-gif.txt"
+
+# id: (texto, chave do contador, alvo, xp, pokébolas, ovos)
+MISSOES = {
+    "ativo60":   ("Use o PC por 1 hora",       "minutos",   60,  150, 0, 0),
+    "ativo120":  ("Use o PC por 2 horas",      "minutos",   120, 250, 1, 0),
+    "musicas10": ("Ouça 10 músicas",           "musicas",   10,  150, 0, 1),
+    "apps4":     ("Use 4 apps diferentes",     "apps",      4,   150, 1, 0),
+    "wallpaper": ("Troque o wallpaper",        "wallpapers", 1,  150, 1, 0),
+    "jogo30":    ("Jogue por 30 minutos",      "jogo",      30,  300, 0, 1),
+    "capturar":  ("Capture um pokémon",        "capturas",  1,   200, 2, 0),
+    "chocar":    ("Choque um ovo",             "chocados",  1,   200, 1, 0),
+}
+
+
+def hoje() -> str:
+    return date.today().isoformat()
+
+
+def atividade_de(d: dict) -> dict:
+    """Os contadores do DIA. Viram zero quando o dia muda."""
+    a = d.get("atividade") or {}
+    if a.get("dia") != hoje():
+        a = {"dia": hoje(), "minutos": 0, "musicas": 0, "apps": [], "wallpapers": 0,
+             "jogo": 0, "capturas": 0, "chocados": 0}
+    a.setdefault("total_min", (d.get("atividade") or {}).get("total_min", 0))
+    a.setdefault("bola_min", (d.get("atividade") or {}).get("bola_min", 0))
+    d["atividade"] = a
+    return a
+
+
+def missoes_de(d: dict) -> dict:
+    """As 3 missões do dia. A semente é a data: o mesmo dia sempre sorteia as
+    mesmas (recarregar o shell não troca as missões)."""
+    m = d.get("missoes") or {}
+    if m.get("dia") == hoje():
+        return m
+    elegiveis = [k for k in MISSOES if k != "chocar" or d.get("ovos")]
+    # só uma missão de tempo ativo por dia
+    rng = random.Random(hoje())
+    lista = rng.sample(elegiveis, 3)
+    if "ativo60" in lista and "ativo120" in lista:
+        lista.remove("ativo60")
+        lista.append(rng.choice([k for k in elegiveis if k not in lista and not k.startswith("ativo")]))
+    d["missoes"] = {"dia": hoje(), "lista": [
+        {"id": k, "texto": MISSOES[k][0], "alvo": MISSOES[k][2], "feito": 0,
+         "xp": MISSOES[k][3], "pokebolas": MISSOES[k][4], "ovos": MISSOES[k][5],
+         "concluida": False} for k in lista]}
+    return d["missoes"]
+
+
+def formas_basicas() -> list[int]:
+    """Espécies que não vêm de nenhuma evolução (Bulbasaur sim, Ivysaur não) e
+    que têm sprite. É de onde saem os ovos."""
+    evos = evoluciones()
+    destinos = {r["a"] for ramas in evos.values() for r in ramas}
+    nums = set(evos) | destinos
+    if not nums:
+        nums = {int(p.stem) for p in DIR_GIF.glob("*.gif") if p.stem.isdigit()}
+    return sorted(n for n in nums if n not in destinos and n <= 1025
+                  and ((DIR_GIF / f"{n}.gif").exists() or (DIR_PNG / f"{n}.png").exists()))
+
+
+def especie_selvagem() -> int:
+    """Combina com o wallpaper: sorteia do top 80 do 'poke-theme rank'. Sem
+    ranking, uma forma básica qualquer."""
+    try:
+        caminhos = [l for l in RANK_GIF.read_text().splitlines() if l.strip()][:80]
+        nums = [int(Path(c).stem) for c in caminhos if Path(c).stem.isdigit()]
+        if nums:
+            return random.choice(nums)
+    except OSError:
+        pass
+    basicas = formas_basicas()
+    return random.choice(basicas) if basicas else random.randint(1, 649)
+
+
+def nome_de(num: int) -> str:
+    return nombres_es().get(num) or nombres().get(num, str(num)).capitalize()
+
+
+def novo_membro(num: int, nivel: int, de: str) -> dict:
+    shiny = random.randrange(SHINY_UNO_DE) == 0
+    if shiny:
+        asegurar_shiny(num)
+    nivel = max(1, min(NIVEL_MAX, nivel))
+    nat = random.choice(list(NATURALEZAS))
+    pk_api.especie(num)
+    return {"num": num, "mote": "", "nivel": nivel, "xp": 0, "genero": motor.sortear_genero(num),
+            "shiny": shiny, "naturaleza": nat, "desde": hoje(), "de": de,
+            "hp": stats.hp_max(num, nivel, nat), "golpes": golpes.iniciais(num, nivel),
+            "centro": None, "amizade": amizade_inicial(de)}
+
+
+def acolher(d: dict, membro: dict) -> str:
+    """Entra no time se houver vaga; senão vai para a caixa."""
+    if len(d["equipo"]) < TAMANO:
+        d["equipo"].append(membro)
+        return "time"
+    d["caja"].append(membro)
+    return "caixa"
+
+
+def pagar_xp(d: dict, xp: int, sucesos: list) -> int:
+    """Entrega XP ao time. Sem time, guarda na reserva e paga quando alguém
+    chegar (assim o tempo antes do primeiro pokémon não se perde)."""
+    xp += int(d.get("xp_reserva", 0))
+    if not d["equipo"]:
+        d["xp_reserva"] = xp
+        return 0
+    d["xp_reserva"] = 0
+    liberar_reservas(d, sucesos)
+    sucesos.extend(repartir(d["equipo"], xp, bool(d.get("repartir")), ligas.cap_xp(d)))
+    return xp
+
+
+def verificar_missoes(d: dict, sucesos: list) -> int:
+    a, m = atividade_de(d), missoes_de(d)
+    xp = 0
+    for mi in m["lista"]:
+        chave = MISSOES.get(mi["id"], ("", "minutos"))[1]
+        valor = a.get(chave, 0)
+        mi["feito"] = min(mi["alvo"], len(valor) if isinstance(valor, list) else int(valor))
+        if mi["concluida"] or mi["feito"] < mi["alvo"]:
+            continue
+        mi["concluida"] = True
+        xp += mi["xp"]
+        dar_item(d, "poke-ball", mi["pokebolas"])
+        for _ in range(mi["ovos"]):
+            if len(d["ovos"]) < OVOS_MAX:
+                d["ovos"].append({"num": None, "faltam_min": random.choice(OVO_MINUTOS),
+                                  "de": mi["texto"]})
+        # PokéIdle: dinheiro + 1 item sorteado por raridade
+        grana = DINHEIRO_MISSAO_BASE + mi["xp"]
+        d["dinheiro"] = int(d.get("dinheiro", 0)) + grana
+        brinde = itens.sortear_premio(tms_do_time(d))
+        dar_item(d, brinde, 1)
+        premio = [f"+{mi['xp']} XP", f"+{grana} ₽"]
+        if mi["pokebolas"]:
+            premio.append(f"+{mi['pokebolas']} Poké Bola" + ("s" if mi["pokebolas"] > 1 else ""))
+        if mi["ovos"]:
+            premio.append("+1 ovo")
+        premio.append(itens.info(brinde)["nome"] + ("!" if itens.info(brinde)["raridade"] != "comum" else ""))
+        sucesos.append({"tipo": "missao", "id": mi["id"],
+                        "texto": f"Missão concluída: {mi['texto']} ({', '.join(premio)})"})
+    return xp
+
+
+def expirar_encontro(d: dict, sucesos: list) -> None:
+    e = d.get("encontro")
+    if e and time.time() > e.get("expira", 0):
+        d["encontro"] = None
+        sucesos.append({"tipo": "fugiu", "num": e["num"],
+                        "texto": f"O {nome_de(e['num'])} selvagem foi embora."})
+
+
+# Bebês criados depois da forma adulta: o Pikachu selvagem não vira Pichu.
+BEBES_RETRO = {172, 173, 174, 238, 239, 240, 298, 360, 406, 433, 438, 439, 440, 458}
+NIVEL_MIN_ITEM = 30         # pedra/troca: a forma evoluída só aparece selvagem daqui em diante
+
+
+def forma_no_nivel(num: int, nivel: int) -> int:
+    """A forma da linha evolutiva que faz sentido nesse nível: um Walrein
+    sorteado no nível 5 aparece como Spheal."""
+    anterior = {r["a"]: (de, r) for de, ramos in evoluciones().items() for r in ramos}
+    for _ in range(4):
+        if num not in anterior:
+            break
+        de, ramo = anterior[num]
+        if de in BEBES_RETRO:
+            break
+        rg = evolucao.regra(ramo)
+        minimo = rg["nivel"] if rg["tipo"] == "nivel" else NIVEL_MIN_ITEM
+        if nivel >= minimo:
+            break
+        num = de
+    return num
+
+
+def talvez_encontro(d: dict, sucesos: list) -> None:
+    if d.get("encontro"):
+        return
+    if not os.environ.get("POKE_FORCAR_ENCONTRO") and random.random() >= ENCONTRO_CHANCE:
+        return
+    niveis = [m["nivel"] for m in d["equipo"]] or [5]
+    media = sum(niveis) // len(niveis)
+    nivel = max(2, media + random.randint(-3, 3))
+    num = forma_no_nivel(especie_selvagem(), nivel)
+    shiny = random.randrange(SHINY_UNO_DE) == 0
+    if shiny:
+        asegurar_shiny(num)
+    # baixa agora o que a captura vai precisar: jogar a bola responde na hora
+    pk_api.especie(num)
+    for g in golpes.iniciais(num, nivel):
+        pk_api.golpe(g)
+    d["encontro"] = {"num": num, "nivel": nivel,
+                     "shiny": shiny, "tentativas": 0, "expira": time.time() + ENCONTRO_DURA}
+    sucesos.append({"tipo": "encontro", "num": num, "shiny": shiny, "quien": nome_de(num), "uno_de": SHINY_UNO_DE,
+                    "nivel": d["encontro"]["nivel"],
+                    "texto": (f"✨ Um {nome_de(num)} BRILHANTE selvagem apareceu!" if shiny
+                             else f"Um {nome_de(num)} selvagem apareceu!")})
+
+
+def chocar_ovos(d: dict, minutos: int, sucesos: list) -> None:
+    for ovo in list(d["ovos"]):
+        ovo["faltam_min"] = int(ovo.get("faltam_min", 0)) - minutos
+        if ovo["faltam_min"] > 0:
+            continue
+        d["ovos"].remove(ovo)
+        basicas = formas_basicas()
+        num = ovo.get("num") or (random.choice(basicas) if basicas else random.randint(1, 649))
+        membro = novo_membro(num, 1, "ovo")
+        onde = acolher(d, membro)
+        atividade_de(d)["chocados"] += 1
+        sucesos.append({"tipo": "ovo", "num": num, "shiny": membro["shiny"], "onde": onde, "quien": nome_de(num), "uno_de": SHINY_UNO_DE,
+                        "texto": f"Seu ovo chocou: {nome_de(num)}!"
+                                 + (" ✨ Brilhante!" if membro["shiny"] else "")
+                                 + (" (foi para a caixa)" if onde == "caixa" else "")})
+
+
+DINHEIRO_POR_MINUTO = 5
+DINHEIRO_MISSAO_BASE = 100     # + o XP da missão -> 250 a 400 ₽
+
+
+def dar_item(d: dict, item: str, qtd: int = 1) -> None:
+    if qtd > 0:
+        mo = d.setdefault("mochila", {})
+        mo[item] = int(mo.get(item, 0)) + qtd
+
+
+def tirar_item(d: dict, item: str) -> bool:
+    mo = d.setdefault("mochila", {})
+    if int(mo.get(item, 0)) <= 0:
+        return False
+    mo[item] -= 1
+    if mo[item] <= 0:
+        del mo[item]
+    return True
+
+
+def tms_do_time(d: dict) -> list[str]:
+    """Golpes de TM que alguém do time aceita (para o TM sorteado servir)."""
+    fora = set()
+    for m in d["equipo"]:
+        fora |= set((pk_api.pokemon(m["num"], baixar=False) or {}).get("tm", []))
+    return sorted(fora)
+
+
+def dar_alta(d: dict, sucesos: list) -> None:
+    for m in d["equipo"] + d["caja"]:
+        c = m.get("centro")
+        if c and time.time() >= c.get("sai", 0):
+            m["centro"] = None
+            m["hp"] = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+            sucesos.append({"tipo": "alta", "texto": f"{m.get('mote') or nome_de(m['num'])} "
+                                                     f"está pronto no Pokécenter!"})
+
+
+def normalizar(d: dict) -> None:
+    d.setdefault("mochila", {"poke-ball": POKEBOLAS_INICIO, "potion": 3})
+    d.setdefault("dinheiro", 1000)
+    # (o ovo de boas-vindas saiu: agora o primeiro pokémon é o inicial)
+    d.setdefault("ovos", [])
+    # saves antigos que já têm time não passam pela tela de iniciais
+    if "inicial" not in d:
+        d["inicial"] = {"num": d["equipo"][0]["num"], "dia": hoje()} if d.get("equipo") else None
+    d.setdefault("encontro", None)
+    d.setdefault("xp_reserva", 0)
+    atividade_de(d)
+    missoes_de(d)
+
+
+def cmd_evento(args) -> int:
+    if getattr(args, "forcar_encontro", False):
+        os.environ["POKE_FORCAR_ENCONTRO"] = "1"
+    if getattr(args, "forcar_desafio", False):
+        os.environ["POKE_FORCAR_DESAFIO"] = "1"
+    d = leer()
+    normalizar(d)
+    a = atividade_de(d)
+    sucesos: list = []
+    xp = 0
+    app = (args.app or "").strip()
+    if args.tipo == "minuto":
+        if a["minutos"] < MINUTOS_MAX_DIA:
+            a["minutos"] += 1
+            a["total_min"] += 1
+            if app and app not in a["apps"]:
+                a["apps"].append(app)
+            if app and any(j in app.lower() for j in JOGO):
+                a["jogo"] += 1
+            xp += XP_POR_MINUTO
+            d["dinheiro"] = int(d.get("dinheiro", 0)) + DINHEIRO_POR_MINUTO
+            a["bola_min"] += 1
+            if a["bola_min"] >= MINUTOS_POR_POKEBOLA:
+                a["bola_min"] = 0
+                dar_item(d, "poke-ball", 1)
+                sucesos.append({"tipo": "item", "texto": "Você ganhou 1 Poké Bola pelo tempo ativo."})
+            # sem inicial ainda: o tempo conta (XP fica guardado), mas nada
+            # de ovos chocando nem selvagens aparecendo
+            if not precisa_inicial(d):
+                chocar_ovos(d, 1, sucesos)
+                talvez_encontro(d, sucesos)
+                talvez_desafio(d, sucesos)
+        # música, vídeo ou jogo neste minuto: a amizade rende o dobro
+        bonus = bool(args.midia) or any(j in app.lower() for j in JOGO)
+        a["amizade_bonus_ate"] = time.time() + 90 if bonus else 0
+        creditar_amizade(d, 2 if bonus else 1)
+    elif args.tipo == "companhia":
+        # sem mexer no PC, mas com música ou vídeo: só amizade, sem XP nem dinheiro
+        a["amizade_bonus_ate"] = 0
+        creditar_amizade(d, 1)
+    elif args.tipo == "musica":
+        a["musicas"] += 1
+    elif args.tipo == "app":
+        if app and app not in a["apps"]:
+            a["apps"].append(app)
+    elif args.tipo == "wallpaper":
+        a["wallpapers"] += 1
+    dar_alta(d, sucesos)
+    expirar_encontro(d, sucesos)
+    expirar_desafio(d)
+    xp += verificar_missoes(d, sucesos)
+    pago = pagar_xp(d, xp, sucesos) if xp else 0
+    avisar_amizade(d, sucesos)
+    guardar(d)
+    print(json.dumps({"nuevos": 0, "xp": pago, "sucesos": sucesos}, ensure_ascii=False))
+    return 0
+
+
+def cmd_lancar(args) -> int:
+    """Joga uma bola (Poké Bola se não disser qual) no selvagem do momento."""
+    d = leer()
+    normalizar(d)
+    sucesos: list = []
+    bola = args.bola or "poke-ball"
+    if getattr(args, "lendario", None):
+        lancar_lendario(d, int(args.lendario), bola, sucesos)
+        xp = verificar_missoes(d, sucesos)
+        pago = pagar_xp(d, xp, sucesos) if xp else 0
+        guardar(d)
+        print(json.dumps({"nuevos": 0, "xp": pago, "sucesos": sucesos}, ensure_ascii=False))
+        return 0
+    expirar_encontro(d, sucesos)
+    e = d.get("encontro")
+    if not e:
+        sucesos.append({"tipo": "aviso", "texto": "Não há nenhum pokémon selvagem agora."})
+    elif itens.info(bola)["cat"] != "bola":
+        sucesos.append({"tipo": "aviso", "texto": f"{itens.info(bola)['nome']} não é uma bola."})
+    elif not tirar_item(d, bola):
+        sucesos.append({"tipo": "aviso", "texto": f"Você não tem {itens.info(bola)['nome']}. "
+                                                  f"Compre na PokéMart ou complete missões."})
+    else:
+        lider = next((m["nivel"] for m in d["equipo"] if not centro.internado(m)), 5)
+        tipos_sel = ((tipos_de().get("pokemon") or {}).get(str(e["num"])) or [])
+        fator = itens.fator_bola(bola, e.get("tentativas", 0), e["nivel"], tipos_sel)
+        chance = 0.35 + 0.04 * (lider - e["nivel"]) + 0.15 * e.get("tentativas", 0)
+        chance = max(0.10, min(0.90, chance)) * fator
+        chance = 1.0 if bola == "master-ball" else min(0.95, chance)
+        if random.random() < chance:
+            membro = novo_membro(e["num"], e["nivel"], "captura")
+            membro["shiny"] = bool(e.get("shiny"))
+            membro["bola"] = bola
+            onde = acolher(d, membro)
+            d["encontro"] = None
+            atividade_de(d)["capturas"] += 1
+            sucesos.append({"tipo": "captura", "num": e["num"], "shiny": membro["shiny"], "quien": nome_de(e["num"]), "uno_de": SHINY_UNO_DE,
+                            "onde": onde,
+                            "texto": f"Gotcha! {nome_de(e['num'])} foi capturado!"
+                                     + (" (foi para a caixa)" if onde == "caixa" else "")})
+        else:
+            e["tentativas"] = e.get("tentativas", 0) + 1
+            if random.random() < ENCONTRO_FOGE_FALHA:
+                d["encontro"] = None
+                sucesos.append({"tipo": "fugiu", "num": e["num"],
+                                "texto": f"Ah, não! O {nome_de(e['num'])} escapou e fugiu."})
+            else:
+                sucesos.append({"tipo": "escapou", "num": e["num"],
+                                "texto": f"O {nome_de(e['num'])} saiu da pokébola! Tente de novo."})
+    xp = verificar_missoes(d, sucesos)
+    pago = pagar_xp(d, xp, sucesos) if xp else 0
+    guardar(d)
+    print(json.dumps({"nuevos": 0, "xp": pago, "sucesos": sucesos}, ensure_ascii=False))
+    return 0
+
+
+def cmd_fugir(args) -> int:
+    d = leer()
+    normalizar(d)
+    e = d.get("encontro")
+    d["encontro"] = None
+    guardar(d)
+    texto = f"Você deixou o {nome_de(e['num'])} ir." if e else "Não há nenhum pokémon selvagem agora."
+    print(json.dumps({"nuevos": 0, "xp": 0, "sucesos": [{"tipo": "fugiu", "texto": texto}]},
+                     ensure_ascii=False))
+    return 0
+
+
+# --- PokéIdle: mochila, Mart, Pokécenter, golpes -----------------------------
+def _saida(sucesos: list, d: dict | None = None, xp: int = 0) -> int:
+    print(json.dumps({"nuevos": 0, "xp": xp, "sucesos": sucesos}, ensure_ascii=False))
+    return 0
+
+
+def batalha_ativa(d: dict) -> dict | None:
+    b = d.get("batalha")
+    return b if b and not b.get("fim") else None
+
+
+def inscrito(d: dict, puesto: int) -> str | None:
+    for reg, insc in (d.get("liga_inscricao") or {}).items():
+        if puesto in insc.get("puestos", []):
+            return reg
+    return None
+
+
+def travar(d: dict, oque: str, puesto=None) -> None:
+    """Durante uma batalha o time não muda; com uma inscrição na Liga a ordem do
+    time fica congelada e os inscritos não vão ao Pokécenter."""
+    if batalha_ativa(d) and oque != "usar":
+        raise SystemExit("Há uma batalha em andamento.")
+    if batalha_ativa(d) and oque == "usar":
+        raise SystemExit("Na batalha, use os itens pela Bolsa.")
+    if d.get("corrida") and oque in ("ordem", "centro", "evoluir", "golpe"):
+        raise SystemExit("Há uma sequência em andamento: encerre-a na aba Batalhas antes de mudar o time.")
+    if d.get("liga_inscricao") and oque in ("ordem",):
+        raise SystemExit("Com uma equipe inscrita na Liga, o time não pode mudar de ordem.")
+    if oque == "centro" and puesto is not None and inscrito(d, int(puesto)):
+        raise SystemExit("Inscritos na Liga não podem ir ao Pokécenter (use itens de cura).")
+
+
+def _membro(d: dict, puesto) -> dict:
+    if puesto is None or not (0 <= int(puesto) < len(d["equipo"])):
+        raise SystemExit("esse lugar do time não existe")
+    return d["equipo"][int(puesto)]
+
+
+def cmd_usar(args) -> int:
+    """Usa um item da mochila (em um pokémon, quando precisa)."""
+    d = leer()
+    normalizar(d)
+    item, inf = args.item, itens.info(args.item)
+    sucesos: list = []
+    travar(d, "usar")
+    if int(d["mochila"].get(item, 0)) <= 0:
+        sucesos.append({"tipo": "aviso", "texto": f"Você não tem {inf['nome']}."})
+        return _saida(sucesos)
+    if inf["cat"] == "bola":
+        sucesos.append({"tipo": "aviso", "texto": "Bolas se usam num encontro selvagem."})
+        return _saida(sucesos)
+    m = _membro(d, args.puesto)
+    quem = m.get("mote") or nome_de(m["num"])
+    hpmax = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+    if inf["cat"] == "cura":
+        if centro.internado(m):
+            sucesos.append({"tipo": "aviso", "texto": f"{quem} está no Pokécenter."})
+        elif int(m.get("hp", hpmax)) <= 0:
+            sucesos.append({"tipo": "aviso", "texto": f"{quem} está derrotado: só o Pokécenter cura."})
+        elif int(m.get("hp", hpmax)) >= hpmax:
+            sucesos.append({"tipo": "aviso", "texto": f"{quem} já está com o HP cheio."})
+        else:
+            antes = int(m["hp"])
+            m["hp"] = min(hpmax, antes + inf["cura"])
+            tirar_item(d, item)
+            sucesos.append({"tipo": "item", "texto": f"{quem} recuperou {m['hp'] - antes} HP."})
+    elif inf["cat"] == "evolucao":
+        ramos = evolucao.por_item(evoluciones().get(m["num"], []), item)
+        if not ramos:
+            sucesos.append({"tipo": "aviso", "texto": f"{inf['nome']} não tem efeito em {quem}."})
+        else:
+            ramo = ramos[0]
+            if args.a:
+                alvo, _ = resolver(args.a)
+                ramo = next((r for r in ramos if r["a"] == alvo), ramo)
+            mapa = nombres()
+            antes, antes_num = mapa.get(m["num"], ""), m["num"]
+            evoluir(m, ramo["a"])
+            tirar_item(d, item)
+            sucesos.append({"tipo": "evolucion", "puesto": int(args.puesto), "de": antes,
+                            "a": mapa.get(m["num"], ""), "de_num": antes_num, "a_num": m["num"],
+                            "shiny": bool(m.get("shiny")), "nivel": m["nivel"]})
+    elif inf["cat"] == "amizade":
+        if inf.get("sino"):
+            if m.get("sino"):
+                sucesos.append({"tipo": "aviso", "texto": f"{quem} já tem um Sino Calmante."})
+            else:
+                m["sino"] = True
+                tirar_item(d, item)
+                sucesos.append({"tipo": "item", "texto": f"{quem} agora carrega o Sino Calmante!"})
+        elif int(m.get("amizade", AMIZADE_BASE)) >= AMIZADE_MAX:
+            sucesos.append({"tipo": "aviso", "texto": f"{quem} já tem a amizade no máximo."})
+        else:
+            ganhar_amizade(m, int(inf["amizade"]))
+            tirar_item(d, item)
+            sucesos.append({"tipo": "item", "texto": f"{quem} adorou a {inf['nome']}!"})
+            avisar_amizade(d, sucesos)
+    elif item == "rare-candy":
+        if m["nivel"] >= NIVEL_MAX:
+            sucesos.append({"tipo": "aviso", "texto": f"{quem} já está no nível 100."})
+        elif m["nivel"] >= ligas.cap_xp(d):
+            sucesos.append({"tipo": "aviso", "texto": f"{quem} está no level cap ({ligas.cap_xp(d)})."})
+        else:
+            tirar_item(d, item)
+            m["xp"] = 0
+            subir_nivel(m, 1, int(args.puesto), sucesos)
+    elif inf["cat"] == "tm":
+        g = inf["golpe"]
+        if not golpes.aceita_tm(m["num"], g):
+            sucesos.append({"tipo": "aviso", "texto": f"{quem} não pode aprender {golpes.info(g)['nome']}."})
+        elif g in m.get("golpes", []):
+            sucesos.append({"tipo": "aviso", "texto": f"{quem} já sabe {golpes.info(g)['nome']}."})
+        else:
+            slot = args.slot if args.slot is not None else len(m.get("golpes", []))
+            gs = m.setdefault("golpes", [])
+            if slot >= golpes.MAX_GOLPES:
+                sucesos.append({"tipo": "aviso", "texto": "Escolha qual golpe substituir (slot 0-3)."})
+                return _saida(sucesos)
+            if slot < len(gs):
+                gs[slot] = g
+            else:
+                gs.append(g)
+            tirar_item(d, item)
+            sucesos.append({"tipo": "item", "texto": f"{quem} aprendeu {golpes.info(g)['nome']}!"})
+    else:
+        sucesos.append({"tipo": "aviso", "texto": f"{inf['nome']} não pode ser usado agora."})
+    guardar(d)
+    return _saida(sucesos)
+
+
+def cmd_comprar(args) -> int:
+    d = leer()
+    normalizar(d)
+    inf = itens.info(args.item)
+    qtd = max(1, args.qtd)
+    if not inf.get("preco"):
+        return _saida([{"tipo": "aviso", "texto": f"A PokéMart não vende {inf['nome']}."}])
+    total = inf["preco"] * qtd
+    if int(d["dinheiro"]) < total:
+        return _saida([{"tipo": "aviso", "texto": f"Dinheiro insuficiente: {inf['nome']} ×{qtd} "
+                                                   f"custa {total} ₽ (você tem {d['dinheiro']} ₽)."}])
+    d["dinheiro"] -= total
+    dar_item(d, args.item, qtd)
+    guardar(d)
+    return _saida([{"tipo": "compra", "texto": f"Comprou {inf['nome']} ×{qtd} por {total} ₽."}])
+
+
+def cmd_centro(args) -> int:
+    d = leer()
+    normalizar(d)
+    travar(d, "centro", args.puesto)
+    m = _membro(d, args.puesto)
+    quem = m.get("mote") or nome_de(m["num"])
+    if centro.internado(m):
+        return _saida([{"tipo": "aviso", "texto": f"{quem} já está no Pokécenter "
+                                                   f"({centro.formatar(centro.restante(m))} restantes)."}])
+    hpmax = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+    seg = centro.internar(m, hpmax)
+    if not seg:
+        return _saida([{"tipo": "aviso", "texto": f"{quem} está com o HP cheio."}])
+    guardar(d)
+    return _saida([{"tipo": "centro", "texto": f"{quem} foi para o Pokécenter: "
+                                               f"pronto em {centro.formatar(seg)}."}])
+
+
+def cmd_golpes(args) -> int:
+    d = leer()
+    m = _membro(d, args.puesto)
+    eq = m.get("golpes", [])
+    aprende = golpes.aprendiveis(m["num"], m["nivel"], d.get("mochila", {}))
+    print(json.dumps({"equipados": [golpes.info(g) for g in eq],
+                      "aprendiveis": [dict(golpes.info(a["id"]), via=a["via"]) for a in aprende]},
+                     ensure_ascii=False))
+    return 0
+
+
+def cmd_golpe(args) -> int:
+    """Equipa um golpe aprendível num slot (0-3)."""
+    d = leer()
+    travar(d, "golpe")
+    m = _membro(d, args.puesto)
+    quem = m.get("mote") or nome_de(m["num"])
+    via = {a["id"]: a["via"] for a in golpes.aprendiveis(m["num"], m["nivel"], d.get("mochila", {}))}
+    g = args.golpe
+    if g not in via:
+        return _saida([{"tipo": "aviso", "texto": f"{quem} não pode aprender {golpes.info(g)['nome']} agora."}])
+    gs = m.setdefault("golpes", [])
+    if g in gs:
+        return _saida([{"tipo": "aviso", "texto": f"{quem} já sabe {golpes.info(g)['nome']}."}])
+    if via[g] == "tm":                     # TM se gasta, como nos jogos atuais
+        tirar_item(d, f"tm-{g}")
+    if args.slot < len(gs):
+        gs[args.slot] = g
+    elif len(gs) < golpes.MAX_GOLPES:
+        gs.append(g)
+    else:
+        return _saida([{"tipo": "aviso", "texto": "Slot inválido (0-3)."}])
+    guardar(d)
+    return _saida([{"tipo": "item", "texto": f"{quem} aprendeu {golpes.info(g)['nome']}!"}])
+
+
+def cmd_debug(args) -> int:
+    """Testes antes das batalhas existirem: 'debug dano <puesto> <hp>' e 'debug centro-ja'."""
+    d = leer()
+    if args.acao == "dano":
+        m = _membro(d, args.puesto)
+        m["hp"] = max(0, int(m.get("hp", 1)) - int(args.valor or 0))
+        if m["hp"] <= 0:                   # derrotado vai sozinho ao centro
+            centro.internar(m, stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", "")))
+    elif args.acao == "centro-ja":
+        for m in d["equipo"] + d["caja"]:
+            if m.get("centro"):
+                m["centro"]["sai"] = time.time() - 1
+    elif args.acao == "dinheiro":
+        d["dinheiro"] = int(d.get("dinheiro", 0)) + int(args.valor or 0)
+    elif args.acao == "item":
+        dar_item(d, args.puesto, int(args.valor or 1))
+    sucesos: list = []
+    dar_alta(d, sucesos)
+    guardar(d)
+    return _saida(sucesos)
+
+
+def cmd_inicial(args) -> int:
+    """Escolhe o pokémon inicial (só uma vez, com o time vazio)."""
+    d = leer()
+    normalizar(d)
+    if not precisa_inicial(d):
+        return _saida([{"tipo": "aviso", "texto": "Você já escolheu seu inicial."}])
+    num, _ = resolver(args.especie)
+    if num not in {n for _, ns in INICIAIS for n in ns}:
+        return _saida([{"tipo": "aviso", "texto": f"{nome_de(num)} não é um inicial."}])
+    m = novo_membro(num, NIVEL_INICIAL, "inicial")
+    m["mote"] = (args.mote or "").strip()[:12]
+    d["equipo"] = [m]
+    d["inicial"] = {"num": num, "dia": hoje()}
+    d["xp_reserva"] = 0          # começa limpo no nível 5
+    d["encontro"] = None
+    if not d.get("github", {}).get("desde"):
+        d.setdefault("github", {})["desde"] = hoje()
+    guardar(d)
+    pk_api.pokemon(num)
+    quem = m["mote"] or nome_de(num)
+    return _saida([{"tipo": "inicial", "num": num, "shiny": m["shiny"], "quien": quem, "uno_de": SHINY_UNO_DE,
+                    "texto": f"{quem} é seu primeiro parceiro!" + (" ✨ E é brilhante!" if m["shiny"] else "")}])
+
+
+def lista_iniciais() -> list:
+    tipos = (tipos_de().get("pokemon") or {})
+    td = tipos_de()
+    fora = []
+    for regiao, nums in INICIAIS:
+        for n in nums:
+            gen, desc = "", ""
+            try:
+                dx = json.loads((HOME / ".cache" / "pokepalette" / "dex" / f"{n}.json").read_text())
+                gen = (dx.get("genero") or {}).get("en") or ""
+                desc = (dx.get("texto") or {}).get("en") or ""
+            except (OSError, ValueError):
+                pass
+            b = stats.base(n) or []
+            gif = DIR_GIF / f"{n}.gif"
+            fora.append({"regiao": regiao, "num": n, "especie": nombres().get(n, str(n)),
+                         "especie_es": nome_de(n),
+                         "gif": str(gif if gif.exists() else DIR_PNG / f"{n}.png"),
+                         "tipos": [{"id": x, "color": (td.get("colores") or {}).get(x, "#888")}
+                                   for x in tipos.get(str(n), [])],
+                         "genero": gen, "desc": desc, "total": sum(b), "base": b})
+    return fora
+
+
+def habilidade_de(num: int) -> str:
+    """A habilidade principal da espécie (a primeira não oculta), em inglês,
+    como nos jogos. Sem dados, string vazia."""
+    try:
+        if habilidade_de.nomes is None:
+            habilidade_de.nomes = json.loads((HOME / ".cache" / "pokepalette" / "habilidades.json").read_text())
+        dx = json.loads((HOME / ".cache" / "pokepalette" / "dex" / f"{num}.json").read_text())
+        hs = [h for h in dx.get("habilidades", []) if not h.get("oculta")] or dx.get("habilidades", [])
+        if not hs:
+            return ""
+        k = hs[0]["clave"]
+        return (habilidade_de.nomes.get(k) or {}).get("en") or k.replace("-", " ").title()
+    except (OSError, ValueError, KeyError):
+        return ""
+
+
+habilidade_de.nomes = None
+
+
+def info_membro(m: dict) -> dict:
+    """Extras do PokéIdle para a interface (não grava nada)."""
+    st = stats.calcular(m["num"], m["nivel"], m.get("naturaleza", ""))
+    hpmax = st["valores"][0] if st else stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+    hp = int(m.get("hp", hpmax))
+    ramos = evoluciones().get(m["num"], [])
+    precisa = []
+    for r in ramos:
+        rg = evolucao.regra(r)
+        precisa.append({"a": r["a"], "especie_es": nome_de(r["a"]), "tipo": rg["tipo"],
+                        "nivel": rg["nivel"], "item": rg["item"],
+                        "item_nome": itens.info(rg["item"])["nome"] if rg["item"] else None,
+                        "condicao": evolucao.texto_condicao(r) if rg["tipo"] == "amizade" else ""})
+    p = pk_api.pokemon(m["num"], baixar=False)
+    amizade = int(m.get("amizade", AMIZADE_BASE))
+    return {"amizade": amizade, "amizade_coracoes": sum(amizade >= x for x in (50, 100, 160, 220, 255)),
+            "amizade_min": evolucao.AMIZADE_MIN, "sino": bool(m.get("sino")),
+            "amizade_evolui": any(r["tipo"] == "amizade" for r in precisa),
+            "habilidade": habilidade_de(m["num"]),"stats": st["lista"] if st else [], "hp": hp, "hp_max": hpmax,
+            "hp_pct": round(hp / max(1, hpmax), 3), "derrotado": hp <= 0,
+            "golpes_info": [golpes.info(g) for g in m.get("golpes", [])],
+            "golpes_baixados": p is not None,
+            "natureza_info": stats.natureza_info(m.get("naturaleza", "")),
+            "no_centro": centro.internado(m), "centro_restante": centro.restante(m),
+            "centro_estimado": centro.duracao(hp, hpmax),
+            "evolucao_precisa": precisa}
+
+
+def extras_estado(d: dict) -> None:
+    """O que o painel precisa da mecânica nova (não altera o save)."""
+    normalizar(d)
+    e = d.get("encontro")
+    if e and time.time() > e.get("expira", 0):
+        e = None
+    if e:
+        gif = DIR_SHINY / f"{e['num']}.gif" if e.get("shiny") else DIR_GIF / f"{e['num']}.gif"
+        if not gif.exists():
+            gif = DIR_GIF / f"{e['num']}.gif"
+        if not gif.exists():
+            gif = DIR_PNG / f"{e['num']}.png"
+        e = dict(e, especie_es=nome_de(e["num"]), gif=str(gif),
+                 segundos=max(0, int(e["expira"] - time.time())))
+    d["encontro"] = e
+    a = d["atividade"]
+    d["hoje"] = {"minutos": a["minutos"], "musicas": a["musicas"], "apps": len(a["apps"]),
+                 "texto": f"Hoje: {a['minutos'] // 60}h{a['minutos'] % 60:02d} ativo"}
+    # PokéIdle
+    d["mochila_lista"] = sorted(
+        [dict(itens.info(k), qtd=v) for k, v in (d.get("mochila") or {}).items() if v > 0],
+        key=lambda x: (list(itens.CATEGORIAS).index(x["cat"]) if x["cat"] in itens.CATEGORIAS else 9, x["nome"]))
+    d["pokebolas"] = int((d.get("mochila") or {}).get("poke-ball", 0))
+    d["bolas"] = [x for x in d["mochila_lista"] if x["cat"] == "bola"]
+    d["mart"] = itens.mart()
+    d["categorias"] = itens.CATEGORIAS
+    d["amizade_bonus"] = time.time() < float(a.get("amizade_bonus_ate", 0))
+    d["modos"] = modos.resumo(d)
+    dz = d.get("desafio")
+    if dz and time.time() > dz.get("expira", 0):
+        dz = None
+    d["desafio"] = dict(dz, sprite=pk_api.sprite_treinador(dz["sprites"], baixar=False),
+                        segundos=max(0, int(dz["expira"] - time.time()))) if dz else None
+    d["precisa_inicial"] = precisa_inicial(d)
+    if d["precisa_inicial"]:
+        d["iniciais"] = lista_iniciais()
+
+
+# --- orders ------------------------------------------------------------------
+def cmd_estado(args) -> int:
+    d = leer()
+    extras_estado(d)
+    mapa, evos = nombres(), evoluciones()
+    d["equipo"] = [adornar(m, mapa, evos) for m in d["equipo"]]
+    d["caja"] = [adornar(m, mapa, evos) for m in d["caja"]]
+    d["tamano"] = TAMANO
+
+    # The TRAINER's progress, which is what does not depend on any single creature.
+    total = sum(m["nivel"] for m in d["equipo"])
+    # Fase 2: as insígnias de verdade (da região com mais progresso)
+    d["ligas"] = ligas.resumo(d, nome_de, _gif_de)
+    d["cap_xp"] = d["ligas"]["cap_xp"]
+    melhor = max(ligas.regioes(), key=lambda k: (d["ligas"]["regioes"][k]["insignias"], -ligas.regioes().index(k)))
+    rg = d["ligas"]["regioes"][melhor]
+    d["medallas"] = [{"nombre": g["insignia"], "ganada": g["vencido"], "tipo": g["tipo"], "regiao": rg["nome"],
+                      "id": g["id"], "regiao_id": melhor}
+                     for g in rg["ginasios"]]
+    prox = next((g for g in rg["ginasios"] if g["proximo"]), None)
+    d["proxima_medalla"] = {"nombre": prox["insignia"], "lider": prox["nome"], "cap": prox["ace"]} if prox else None
+    d["batalha"] = _adornar_batalha(d.get("batalha"))
+    d["nivel_total"] = total
+    d["rango"] = rango_de(total)
+    # The last thing that went wrong with the walk, if there is anything. It is
+    # read from the file and not stored in the save: it is a note about the
+    # machine (a prototype that could not be built), not about the trainer, and
+    # whoever writes it deletes it by itself as soon as the leader gets out.
+    try:
+        d["pasea_fallo"] = json.loads(PASEA_FALLO.read_text())
+    except (OSError, ValueError):
+        d["pasea_fallo"] = None
+    print(json.dumps(d, ensure_ascii=False))
+    return 0
+
+
+def cmd_ver(args) -> int:
+    d = leer()
+    mapa, evos = nombres(), evoluciones()
+    if not d["equipo"]:
+        print(tr("equipo vacio. Metelos con:  poke-team add <pokemon>",
+                 "Empty team. Add Pokémon with:  poke-team add <pokemon>",
+                 "squadra vuota. Aggiungili con:  poke-team add <pokemon>"))
+        return 0
+    print(tr(f"equipo de {d['github'].get('login') or 'nadie'}"
+             f"  ({d['github'].get('contadas', 0)} aportes contados"
+             f" desde {d['github'].get('desde') or '?'})",
+             f"Team of {d['github'].get('login') or 'nobody'}"
+             f"  ({d['github'].get('contadas', 0)} contributions counted"
+             f" since {d['github'].get('desde') or '?'})",
+             f"squadra di {d['github'].get('login') or 'nessuno'}"
+             f"  ({d['github'].get('contadas', 0)} contributi conteggiati"
+             f" da {d['github'].get('desde') or '?'})"))
+    total = sum(m["nivel"] for m in d["equipo"])
+    aportes = int(d["github"].get("contadas", 0))
+    ganadas = [n for a, n in MEDALLAS if aportes >= a]
+    print(tr(f"  rango: {rango_de(total)}  (nivel total {total})"
+             f"   medallas: {len(ganadas)}/8",
+             f"  Rank: {rango_de(total)}  (total level {total})   Badges: {len(ganadas)}/8",
+             f"  Rango: {rango_de(total)}  (livello totale {total})   Medaglie: {len(ganadas)}/8")
+          + (f"  [{', '.join(ganadas)}]" if ganadas else ""))
+    for i, m in enumerate(d["equipo"]):
+        a = adornar(m, mapa, evos)
+        barra = int(a["progreso"] * 20)
+        marca = "*" if i == 0 else " "
+        pend = tr("  <- puede evolucionar", "  <- can evolve", "  <- può evolvere") if a["puede_evolucionar"] else ""
+        estrella = "*" if m.get("shiny") else " "
+        tipos = "/".join(x["es"] for x in a["tipos"]) or "?"
+        print(tr(f" {marca}{i}.{estrella}{(m.get('mote') or a['especie_es']):14} niv {m['nivel']:>3}  "
+                 f"[{'#'*barra}{'.'*(20-barra)}] {m['xp']}/{a['umbral']}"
+                 f"  {tipos:<18} {a['naturaleza']}{pend}",
+                 f" {marca}{i}.{estrella}{(m.get('mote') or a['especie_es']):14} lv {m['nivel']:>3}  "
+                 f"[{'#'*barra}{'.'*(20-barra)}] {m['xp']}/{a['umbral']}"
+                 f"  {tipos:<18} {a['naturaleza']}{pend}",
+                 f" {marca}{i}.{estrella}{(m.get('mote') or a['especie_es']):14} lv {m['nivel']:>3}  "
+                 f"[{'#'*barra}{'.'*(20-barra)}] {m['xp']}/{a['umbral']}"
+                 f"  {tipos:<18} {a['naturaleza']}{pend}"))
+    if d["caja"]:
+        print(tr(f" caja ({len(d['caja'])}):", f" Box ({len(d['caja'])}):", f" Box ({len(d['caja'])}):"))
+        for i, m in enumerate(d["caja"]):
+            a = adornar(m, mapa, evos)
+            print(tr(f"   {i}. {(m.get('mote') or a['especie']):14} niv {m['nivel']:>3}",
+                     f"   {i}. {(m.get('mote') or a['especie']):14} lv {m['nivel']:>3}",
+                     f"   {i}. {(m.get('mote') or a['especie']):14} lv {m['nivel']:>3}"))
+    return 0
+
+
+def cmd_add(args) -> int:
+    d = leer()
+    if len(d["equipo"]) >= TAMANO:
+        raise SystemExit(tr(f"el equipo ya tiene {TAMANO}; saca a alguno con 'quitar'",
+                            f"The team already has {TAMANO}; remove one with 'quitar'",
+                            f"la squadra ha già {TAMANO}; rimuovi uno con 'quitar'"))
+    num, especie = resolver(args.pokemon)
+    if not (DIR_GIF / f"{num}.gif").exists() and not (DIR_PNG / f"{num}.png").exists():
+        raise SystemExit(tr(f"no tengo sprite de #{num}; ejecuta 'poke-sprites'",
+                            f"No sprite for #{num}; run 'poke-sprites'",
+                            f"non ho lo sprite di #{num}; esegui 'poke-sprites'"))
+    # The shiny roll, on joining and for ever: it survives evolutions because it
+    # belongs to the INDIVIDUAL (the shiny field is not touched when num
+    # changes). Rerolling by taking it out and back in is costly: it loses its
+    # levels.
+    shiny = random.randrange(SHINY_UNO_DE) == 0
+    if shiny:
+        asegurar_shiny(num)
+    d["equipo"].append({"num": num, "mote": args.mote or "", "nivel": args.nivel,
+                        "xp": 0, "shiny": shiny,
+                        "naturaleza": random.choice(list(NATURALEZAS)),
+                        "desde": date.today().isoformat()})
+    # The starting line is set when the FIRST one is added: contributions count
+    # from there on. Not what came before, which you already worked without a team.
+    if not d["github"].get("desde"):
+        d["github"]["desde"] = date.today().isoformat()   # GitHub desativado: não consulta mais
+    guardar(d)
+    puesto = len(d["equipo"]) - 1
+    extra = tr(f"  ¡¡VARIOCOLOR!! (1 entre {SHINY_UNO_DE})", f"  SHINY!! (1 in {SHINY_UNO_DE})", f"  SHINY!! (1 di {SHINY_UNO_DE})") if shiny else ""
+    print(tr(f"{args.mote or especie} entra al equipo (puesto {puesto}){extra}",
+             f"{args.mote or especie} joins the team (slot {puesto}){extra}",
+             f"{args.mote or especie} entra nella squadra (posto {puesto}){extra}"))
+    # A shiny is 1 in 64 and deserves the notch's ceremony, so it also comes out
+    # as a JSON EVENT -- just like 'evolucionar' does, which is the other moment
+    # worth celebrating. It goes on a SECOND line instead of replacing the one
+    # above because 'add' is also used by hand from the terminal, and there the
+    # news has to be readable. The shell keeps the last line.
+    if shiny:
+        print(json.dumps({"tipo": "variocolor", "puesto": puesto,
+                          "quien": args.mote or especie, "num": num,
+                          "nivel": args.nivel, "uno_de": SHINY_UNO_DE},
+                         ensure_ascii=False))
+    return 0
+
+
+def cmd_quitar(args) -> int:
+    d = leer()
+    travar(d, "ordem")
+    if not (0 <= args.puesto < len(d["equipo"])):
+        raise SystemExit(tr("ese puesto no existe", "That team slot does not exist", "quel posto della squadra non esiste"))
+    fuera = d["equipo"].pop(args.puesto)
+    guardar(d)
+    print(tr(f"fuera {fuera.get('mote') or nombres().get(fuera['num'], fuera['num'])}",
+             f"Removed {fuera.get('mote') or nombres().get(fuera['num'], fuera['num'])}",
+             f"Rimosso {fuera.get('mote') or nombres().get(fuera['num'], fuera['num'])}"))
+    return 0
+
+
+def cmd_mote(args) -> int:
+    d = leer()
+    if not (0 <= args.puesto < len(d["equipo"])):
+        raise SystemExit(tr("ese puesto no existe", "That team slot does not exist", "quel posto della squadra non esiste"))
+    d["equipo"][args.puesto]["mote"] = args.nombre
+    guardar(d)
+    print(tr(f"ahora se llama {args.nombre}", f"Now called {args.nombre}", f"ora si chiama {args.nombre}"))
+    return 0
+
+
+def cmd_lider(args) -> int:
+    d = leer()
+    travar(d, "ordem")
+    if not (0 <= args.puesto < len(d["equipo"])):
+        raise SystemExit(tr("ese puesto no existe", "That team slot does not exist", "quel posto della squadra non esiste"))
+    d["equipo"].insert(0, d["equipo"].pop(args.puesto))
+    guardar(d)
+    print(tr(f"{d['equipo'][0].get('mote') or nombres().get(d['equipo'][0]['num'])} va delante",
+             f"{d['equipo'][0].get('mote') or nombres().get(d['equipo'][0]['num'])} is the leader",
+             f"{d['equipo'][0].get('mote') or nombres().get(d['equipo'][0]['num'])} è il capo"))
+    return 0
+
+
+def cmd_mover(args) -> int:
+    """Moves one to another slot, shifting the ones in between.
+
+    Needed for drag-to-reorder in the notch. With 'lider' you can only send one
+    to the front, and chaining that does not reach an arbitrary order without
+    juggling: to put the third one in second place you would have to raise the
+    third and then raise the one that was second again.
+    """
+    d = leer()
+    travar(d, "ordem")
+    n = len(d["equipo"])
+    if not (0 <= args.de < n):
+        raise SystemExit(tr("ese puesto no existe", "That team slot does not exist", "quel posto della squadra non esiste"))
+    # The destination is clamped to the range instead of failing: dropping below
+    # the last row means "the last one", not that you made a mistake.
+    destino = max(0, min(args.a, n - 1))
+    if destino == args.de:
+        return 0
+    d["equipo"].insert(destino, d["equipo"].pop(args.de))
+    guardar(d)
+    m = d["equipo"][destino]
+    print(tr(f"{m.get('mote') or nombres().get(m['num'])} al puesto {destino}",
+             f"{m.get('mote') or nombres().get(m['num'])} to slot {destino}",
+             f"{m.get('mote') or nombres().get(m['num'])} al posto {destino}"))
+    return 0
+
+
+def cmd_evolucionar(args) -> int:
+    d = leer()
+    if not (0 <= args.puesto < len(d["equipo"])):
+        raise SystemExit(tr("ese puesto no existe", "That team slot does not exist", "quel posto della squadra non esiste"))
+    m = d["equipo"][args.puesto]
+    travar(d, "evoluir")
+    if inscrito(d, args.puesto):
+        raise SystemExit("Inscritos na Liga não podem evoluir até a Liga acabar.")
+    mapa, evos = nombres(), evoluciones()
+    # nível e amizade (pedras e troca vão por 'usar <item>')
+    listas = evolucoes_prontas(m, evos.get(m["num"], []))
+    if not listas:
+        raise SystemExit(tr(f"{mapa.get(m['num'], m['num'])} no puede evolucionar todavia",
+                            f"{mapa.get(m['num'], m['num'])} cannot evolve yet",
+                            f"{mapa.get(m['num'], m['num'])} non può evolvere ancora"))
+    elegida = listas[0]
+    if args.a:
+        destino, _ = resolver(args.a)
+        coincide = [r for r in listas if r["a"] == destino]
+        if not coincide:
+            opciones = ", ".join(mapa.get(r["a"], str(r["a"])) for r in listas)
+            raise SystemExit(tr(f"no evoluciona en eso. Puede: {opciones}",
+                                f"It cannot evolve into that. Options: {opciones}",
+                                f"non si evolve in quello. Opzioni: {opciones}"))
+        elegida = coincide[0]
+    elif len(listas) > 1:
+        opciones = ", ".join(mapa.get(r["a"], str(r["a"])) for r in listas)
+        raise SystemExit(tr(f"hay que elegir: {opciones}  (usa 'evolucionar {args.puesto} a <cual>')",
+                            f"Choose one: {opciones}  (use 'evolucionar {args.puesto} a <which>')",
+                            f"devi scegliere: {opciones}  (usa 'evolucionar {args.puesto} a <quale>')"))
+    antes, antes_num = mapa.get(m["num"], ""), m["num"]
+    evoluir(m, elegida["a"])
+    guardar(d)
+    # JSON and not text: the panel launches this and needs the numbers of both
+    # forms to put together the evolution animation.
+    print(json.dumps({"tipo": "evolucion", "puesto": args.puesto, "de": antes,
+                      "a": mapa.get(m["num"], ""), "de_num": antes_num,
+                      "a_num": m["num"], "shiny": bool(m.get("shiny")),
+                      "nivel": m["nivel"]}, ensure_ascii=False))
+    return 0
+
+
+def _forma_previa(num: int, m: dict) -> dict:
+    gif = DIR_SHINY / f"{num}.gif" if m.get("shiny") else DIR_GIF / f"{num}.gif"
+    if not gif.exists():
+        gif = DIR_GIF / f"{num}.gif"
+    if not gif.exists():
+        gif = DIR_PNG / f"{num}.png"
+    st = stats.calcular(num, m["nivel"], m.get("naturaleza", ""))
+    return {"num": num, "especie": nombres().get(num, str(num)), "especie_es": nome_de(num), "gif": str(gif),
+            "tipos": (tipos_de().get("pokemon") or {}).get(str(num), []),
+            "habilidade": habilidade_de(num), "stats": st["lista"] if st else []}
+
+
+def cmd_evolucao_previa(args) -> int:
+    """O que cada evolução mudaria (só leitura, para a janela de prévia)."""
+    d = leer()
+    m = _membro(d, args.puesto)
+    if m.get("shiny"):
+        asegurar_shiny(m["num"])
+    ramos = evoluciones().get(m["num"], [])
+    prontas = evolucoes_prontas(m, ramos)
+    golpes_tipos = tipos_dos_golpes(m)
+    bloqueio = ("Há uma batalha em andamento." if batalha_ativa(d)
+                else "Inscritos na Liga não evoluem até a Liga acabar." if inscrito(d, args.puesto) else "")
+    atual = _forma_previa(m["num"], m)
+    opcoes = []
+    for r in ramos:
+        rg = evolucao.regra(r)
+        if m.get("shiny"):
+            asegurar_shiny(r["a"])
+        if r in prontas:
+            motivo = ""
+        elif rg["tipo"] == "amizade":
+            motivo = evolucao.motivo_amizade(r, int(m.get("amizade", AMIZADE_BASE)), evolucao.hora_agora(), golpes_tipos)
+        elif rg["tipo"] == "item":
+            motivo = f"use {itens.info(rg['item'])['nome']} pela Mochila"
+        else:
+            motivo = f"nível {rg['nivel']}"
+        forma = _forma_previa(r["a"], m)
+        antes = {s["chave"]: s["valor"] for s in atual["stats"]}
+        forma["stats"] = [dict(s, antes=antes.get(s["chave"], s["valor"])) for s in forma["stats"]]
+        opcoes.append(dict(forma, disponivel=r in prontas and not bloqueio, motivo=bloqueio or motivo))
+    opcoes.sort(key=lambda o: not o["disponivel"])
+    print(json.dumps({"puesto": args.puesto, "quem": m.get("mote") or nome_de(m["num"]), "nivel": m["nivel"],
+                      "atual": atual, "opcoes": opcoes}, ensure_ascii=False))
+    return 0
+
+
+def cmd_sync(args) -> int:
+    # Desativado: o XP agora vem do tempo ativo e das missões ('evento').
+    # O código antigo fica abaixo (inalcançável) para referência.
+    print(json.dumps({"nuevos": 0, "sucesos": [], "motivo": "github desativado"}))
+    return 0
+    # The network FIRST and without the lock: asking GitHub can take a minute,
+    # and keeping the save locked all that time would leave the panel hanging.
+    # It is read afterwards, under the lock, so nobody sneaks in between the
+    # read and the write.
+    datos = datos_github()
+    if not datos or datos.get("error"):
+        print(json.dumps({"nuevos": 0, "sucesos": [], "motivo": "sin datos de github"}))
+        return 1
+
+    with partida():
+        return _sync_con_datos(datos)
+
+
+def _sync_con_datos(datos: dict) -> int:
+    d = leer()
+    if not d["equipo"]:
+        print(json.dumps({"nuevos": 0, "sucesos": [], "motivo": "equipo vacio"}))
+        return 0
+    g = d["github"]
+    if not g.get("desde"):
+        g["desde"] = date.today().isoformat()
+
+    # ACCOUNT CHANGE: nothing is counted. A 'gh auth switch' to another account
+    # dropped the counter to zero -taking the badges down with it- and, on
+    # switching back, paid out the other account's whole year in one go: almost
+    # 800 contributions, dozens of levels and chained evolutions for work that
+    # had already been paid for.
+    quien = datos.get("login", "")
+    if quien and g.get("login") and quien != g["login"]:
+        print(json.dumps({"nuevos": 0, "xp": 0, "sucesos": [],
+                          "motivo": f"otra cuenta de github ({quien}): no cuento nada"},
+                         ensure_ascii=False))
+        return 0
+    g["login"] = quien or g.get("login", "")
+    # Streak bonus: committing daily is worth more than a one-off binge.
+    # +10% per consecutive day, capped at DOUBLE at 10. github-stats.py already
+    # computes the streak; here it is only applied and stored so the panel can
+    # show it without another call.
+    racha = int(datos.get("streak") or 0)
+    g["racha"] = racha
+    mult = 1.0 + min(racha, RACHA_TOPE) / RACHA_TOPE
+    # GitHub's grid is a twelve-month SLIDING WINDOW, so its total drops by
+    # itself over time as days fall off the edge. That is why there are two
+    # numbers and not one: 'ventana' is the snapshot of the grid and can go down;
+    # 'contadas' is the trainer's running total and NEVER goes down, because the
+    # badges hang off it. They used to be the same field, and the day a busy day
+    # fell off the edge the badges went backwards.
+    total = aportes_desde(datos, g["desde"])
+    previo = int(g.get("ventana", g.get("contadas", 0)))
+    nuevos = max(0, total - previo)
+    ganancia = int(round(nuevos * int(d.get("xp_por_aporte", XP_POR_APORTE)) * mult))
+    sucesos = []
+    if nuevos:
+        sucesos = repartir(d["equipo"], ganancia, bool(d.get("repartir")))
+    g["ventana"] = total
+    g["contadas"] = int(g.get("contadas", 0)) + nuevos
+    guardar(d)
+    print(json.dumps({"nuevos": nuevos, "xp": ganancia, "racha": racha,
+                      "mult": round(mult, 2), "sucesos": sucesos},
+                     ensure_ascii=False))
+    return 0
+
+
+def cmd_guardar(args) -> int:
+    """From the team to the box. NOTHING is lost: it keeps level, experience,
+    nickname, nature and whether it is shiny. It is a move, not a deletion --
+    which is why guardar asks for no confirmation and quitar does."""
+    d = leer()
+    travar(d, "ordem")
+    if not (0 <= args.puesto < len(d["equipo"])):
+        raise SystemExit(tr("ese puesto no existe", "That team slot does not exist", "quel posto della squadra non esiste"))
+    if len(d["equipo"]) <= 1:
+        raise SystemExit("o time precisa de pelo menos 1 pokémon")
+    m = d["equipo"].pop(args.puesto)
+    d["caja"].append(m)
+    guardar(d)
+    print(tr(f"{m.get('mote') or nombres().get(m['num'], m['num'])} a la caja "
+             f"(quedan {len(d['equipo'])} en el equipo)",
+             f"{m.get('mote') or nombres().get(m['num'], m['num'])} moved to the box ({len(d['equipo'])} left in the team)",
+             f"{m.get('mote') or nombres().get(m['num'], m['num'])} messo nel box ({len(d['equipo'])} rimasti nella squadra)"))
+    return 0
+
+
+def cmd_sacar(args) -> int:
+    """From the box to the team."""
+    d = leer()
+    travar(d, "ordem")
+    if not (0 <= args.indice < len(d["caja"])):
+        raise SystemExit(tr("ese sitio de la caja esta vacio", "That box slot is empty", "quel posto del box è vuoto"))
+    if len(d["equipo"]) >= TAMANO:
+        raise SystemExit(tr(f"el equipo ya tiene {TAMANO}: guarda a alguno primero",
+                            f"The team already has {TAMANO}: store one first",
+                            f"la squadra ha già {TAMANO}: metti prima qualcuno nel box"))
+    m = d["caja"].pop(args.indice)
+    d["equipo"].append(m)
+    guardar(d)
+    print(tr(f"{m.get('mote') or nombres().get(m['num'], m['num'])} vuelve al equipo",
+             f"{m.get('mote') or nombres().get(m['num'], m['num'])} returns to the team",
+             f"{m.get('mote') or nombres().get(m['num'], m['num'])} torna alla squadra"))
+    return 0
+
+
+def cmd_trocar(args) -> int:
+    """PokéIdle: troca um membro do time por um da caixa, numa ida só. O da
+    caixa assume o lugar no time; o do time fica no lugar dele na caixa."""
+    d = leer()
+    travar(d, "ordem")
+    if not (0 <= args.puesto < len(d["equipo"])):
+        raise SystemExit("esse lugar do time não existe")
+    if not (0 <= args.indice < len(d["caja"])):
+        raise SystemExit("esse lugar da caixa está vazio")
+    d["equipo"][args.puesto], d["caja"][args.indice] = d["caja"][args.indice], d["equipo"][args.puesto]
+    guardar(d)
+    print(f"{nome_de(d['equipo'][args.puesto]['num'])} entrou no time; "
+          f"{nome_de(d['caja'][args.indice]['num'])} foi para a caixa")
+    return 0
+
+
+def cmd_flag(args) -> int:
+    """The team's two switches: 'repartir' (experience in equal shares) and
+    'pasear' (the leader walks about the desktop). Same on/off/toggle pattern
+    as poke-theme, which the notch and your fingers already know."""
+    d = leer()
+    clave = args.cmd
+    d[clave] = (not d.get(clave)) if args.accion == "toggle" else args.accion == "on"
+    guardar(d)
+    print("on" if d[clave] else "off")
+    return 0
+
+
+# =============================================================================
+# FASE 2: batalhas, ginásios, Ligas, revanches e lendários (pokeidle/ligas.py,
+# pokeidle/batalha.py). A batalha em andamento fica em d["batalha"].
+# =============================================================================
+def _lutador_meu(m: dict, puesto: int, pp: dict | None = None) -> dict:
+    return motor.novo_lutador(m["num"], m["nivel"], m.get("naturaleza", ""),
+                              m.get("mote") or nome_de(m["num"]), m.get("golpes") or [],
+                              hp=m.get("hp"), shiny=bool(m.get("shiny")),
+                              genero=m.get("genero", "-"), puesto=puesto, pp=pp)
+
+
+def _lutador_50(m: dict, puesto: int) -> dict:
+    """O pokémon no nível dos modos de desafio, com o HP proporcional ao real."""
+    lut = motor.novo_lutador(m["num"], modos.NIVEL, m.get("naturaleza", ""), m.get("mote") or nome_de(m["num"]),
+                             m.get("golpes") or [], shiny=bool(m.get("shiny")), genero=m.get("genero", "-"),
+                             puesto=puesto)
+    real = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+    lut["hp"] = max(1, -(-lut["hp_max"] * int(m.get("hp", real)) // max(1, real)))
+    return lut
+
+
+def _sync_hp(d: dict, b: dict) -> None:
+    for lut in b["meu"]:
+        p = lut.get("puesto")
+        if p is None or not (0 <= p < len(d["equipo"])):
+            continue
+        m = d["equipo"][p]
+        if b.get("nivel50"):
+            real = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+            m["hp"] = 0 if lut["hp"] <= 0 else max(1, round(lut["hp"] / lut["hp_max"] * real))
+        else:
+            m["hp"] = lut["hp"]
+
+
+def _fim_corrida(d: dict) -> None:
+    """Acabou a sequência: quem terminou desmaiado vai ao Pokécenter."""
+    c = d.get("corrida")
+    if not c:
+        return
+    for q in c["puestos"]:
+        if q < len(d["equipo"]):
+            m = d["equipo"][q]
+            if int(m.get("hp", 1)) <= 0 and not centro.internado(m):
+                centro.internar(m, stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", "")))
+    d["corrida"] = None
+
+
+def _concluir_modo(d: dict, b: dict, sucesos: list) -> None:
+    """Fim de uma luta dos modos: XP, dinheiro, BP, recordes e Pokécenter."""
+    res = {"resultado": b["fim"], "premio": 0, "xp": dict(b["xp"]), "insignia": None, "tm": None,
+           "campeao": False, "subiu": [], "bp": 0, "continua": False, "sequencia": 0, "recorde": False}
+    _sync_hp(d, b)
+    real = not b.get("sem_xp")
+    antes = {i: m["nivel"] for i, m in enumerate(d["equipo"])}
+    participantes = []
+    if real:
+        cap = ligas.cap_xp(d)
+        for p, xp in b["xp"].items():
+            p = int(p)
+            if 0 <= p < len(d["equipo"]):
+                m = d["equipo"][p]
+                # no nível 50 a luta rende no máximo um nível de XP
+                xp = min(int(xp), umbral(m["nivel"])) if b.get("nivel50") else int(xp)
+                res["xp"][str(p)] = xp
+                ganhar_xp(m, p, xp, cap, sucesos)
+                participantes.append(m)
+        for lut in b["meu"]:
+            if lut.get("_caiu") and lut["puesto"] < len(d["equipo"]):
+                ganhar_amizade(d["equipo"][lut["puesto"]], AMIZADE_DESMAIO)
+    c = d.get("corrida")
+    if b["fim"] == "vitoria":
+        d["dinheiro"] = int(d.get("dinheiro", 0)) + b["premio"]
+        res["premio"] = b["premio"]
+        for m in participantes:
+            ganhar_amizade(m, AMIZADE_VITORIA)
+        r = modos.vitoria(d, b)
+        res.update(bp=r["bp"], continua=r["continua"], sequencia=r["sequencia"], recorde=r["recorde"])
+        if r["item"]:
+            dar_item(d, r["item"], 1)
+            res["tm"] = itens.info(r["item"])["nome"]
+        if c and b["modo"] == "tower":
+            for q, hp in c["hp_entrada"].items():
+                d["equipo"][int(q)]["hp"] = hp
+        if c and r["cura"]:
+            for q in c["puestos"]:
+                m = d["equipo"][q]
+                if int(m.get("hp", 0)) > 0:
+                    mx = stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", ""))
+                    m["hp"] = min(mx, int(m["hp"]) + -(-mx * 30 // 100))
+        if c and not r["continua"]:
+            _fim_corrida(d)
+    else:
+        perda = min(int(d.get("dinheiro", 0)), b["premio"] // 2)
+        d["dinheiro"] = int(d.get("dinheiro", 0)) - perda
+        res["premio"] = -perda
+        if b["modo"] == "random":
+            d["random_seq"] = 0
+        res["sequencia"] = int(c["vitorias"]) if c else 0
+        _fim_corrida(d)
+    if real and not d.get("corrida"):
+        for lut in b["meu"]:
+            q = lut["puesto"]
+            if q < len(d["equipo"]) and int(d["equipo"][q].get("hp", 1)) <= 0 and not centro.internado(d["equipo"][q]):
+                m = d["equipo"][q]
+                centro.internar(m, stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", "")))
+    res["subiu"] = [{"puesto": i, "quien": m.get("mote") or nome_de(m["num"]), "nivel": m["nivel"]}
+                    for i, m in enumerate(d["equipo"]) if m["nivel"] > antes.get(i, m["nivel"])]
+    b["resultado"] = res
+
+
+def _comecar_luta(d: dict, modo: str, formato: str, regiao: str | None) -> list:
+    """Monta a próxima luta do modo e a põe em d["batalha"]."""
+    op = modos.adversario(d, modo, formato, regiao)
+    rng = random.Random()
+    c = d.get("corrida")
+    regra = op.get("regra", "")
+    formato = "duplas" if regra == "duplas" else formato
+    fora = []
+    if modo == "random":
+        meu = [modos.lutador({"num": n, "nivel": modos.NIVEL}, nome_de(n), rng)
+               for n in modos.sortear_especies(rng, 6, 400, 600)]
+    else:
+        lugares = c["puestos"] if c else range(len(d["equipo"]))
+        meu = []
+        for q in lugares:
+            m = d["equipo"][q]
+            if centro.internado(m) or int(m.get("hp", 1)) <= 0:
+                fora.append(f"{m.get('mote') or nome_de(m['num'])} não pode lutar")
+            else:
+                meu.append(_lutador_50(m, q))
+        if regra == "trio":
+            meu = meu[:3]
+    if not meu:
+        raise SystemExit("Ninguém do time pode lutar agora.")
+    ini = [modos.lutador(x, nome_de(x["num"]), rng) for x in op["time"]]
+    for lut in meu:
+        for g in lut["golpes"]:
+            pk_api.golpe(g["id"])
+        pk_api.sprite_costas(lut["num"], lut.get("shiny"))
+    pk_api.sprite_treinador(op["sprite"])
+    ace = max(x["nivel"] for x in op["time"])
+    reais = [d["equipo"][l["puesto"]]["nivel"] for l in meu if l.get("puesto") is not None]
+    seq = int(c["vitorias"]) + 1 if c else 0
+    b, ev = motor.nova(meu, ini, {
+        "tipo": "modo", "modo": modo, "regiao": regiao, "alvo": modo, "cap": None, "etapa": None,
+        "formato": formato, "treinador": op["treinador"], "sprite_lista": op["sprite"], "ace": ace,
+        "rotulo": modos.TITULOS[modo] + (f"  ·  luta {seq}" if seq else ""),
+        "premio": modos.premio(ace), "tipo_treinador": "normal", "fora": fora, "nivel50": modo != "random",
+        "sem_xp": modo == "random", "sem_itens": modo == "random" or regra == "sem_itens",
+        "xp_nivel": sum(reais) // len(reais) if reais else None}, potions=1 if op.get("chefe") else 0)
+    d["batalha"] = b
+    return ev
+
+
+def _responder_batalha(d: dict, ev: list, sucesos: list) -> int:
+    guardar(d)
+    print(json.dumps({"eventos": ev, "batalha": _adornar_batalha(d.get("batalha")),
+                      "nuevos": 0, "xp": 0, "sucesos": sucesos}, ensure_ascii=False))
+    return 0
+
+
+def cmd_modos(args) -> int:
+    d = leer()
+    normalizar(d)
+    a = args.acao
+    if a == "estado":
+        print(json.dumps(modos.resumo(d), ensure_ascii=False))
+        return 0
+    if a == "comprar":
+        preco = modos.loja().get(args.x)
+        if preco is None:
+            raise SystemExit("A loja não vende esse item.")
+        if int(d.get("bp", 0)) < preco:
+            return _saida([{"tipo": "aviso", "texto": f"BP insuficiente: custa {preco} BP."}])
+        d["bp"] = int(d.get("bp", 0)) - preco
+        dar_item(d, args.x, 1)
+        pk_api.sprite_item(args.x)
+        guardar(d)
+        return _saida([{"tipo": "compra", "texto": f"Comprou {itens.info(args.x)['nome']} por {preco} BP."}])
+    if batalha_ativa(d):
+        raise SystemExit("Há uma batalha em andamento.")
+    if a == "encerrar":
+        _fim_corrida(d)
+        d["batalha"] = None
+        return _responder_batalha(d, [], [])
+    if a == "continuar":
+        c = d.get("corrida")
+        if not c:
+            raise SystemExit("Não há sequência em andamento.")
+        return _responder_batalha(d, _comecar_luta(d, c["modo"], c["formato"], c.get("regiao")), [])
+    # iniciar <modo> [formato] [regiao]
+    modo, formato, regiao = args.x, args.y or "singles", args.z
+    if d.get("corrida"):
+        raise SystemExit("Termine a sequência em andamento antes de começar outra.")
+    modos.validar(d, modo, formato, regiao)
+    if modo in ("tower", "survival", "bossrush"):
+        aptos = [q for q, m in enumerate(d["equipo"]) if not centro.internado(m) and int(m.get("hp", 1)) > 0]
+        if modo == "tower":
+            aptos = aptos[:modos.TAM_TOWER[formato]]
+        if not aptos:
+            raise SystemExit("Ninguém do time pode lutar agora.")
+        d["corrida"] = {"modo": modo, "formato": formato, "regiao": regiao, "vitorias": 0, "puestos": aptos,
+                        "hp_entrada": {str(q): int(d["equipo"][q].get("hp", 1)) for q in aptos},
+                        "bp": 0, "inicio": hoje()}
+    return _responder_batalha(d, _comecar_luta(d, modo, formato, regiao), [])
+
+
+def talvez_desafio(d: dict, sucesos: list) -> None:
+    """De vez em quando um treinador avulso desafia você pelo notch."""
+    a = atividade_de(d)
+    forcar = bool(os.environ.get("POKE_FORCAR_DESAFIO"))
+    if d.get("desafio") or d.get("encontro") or batalha_ativa(d) or d.get("corrida") or d.get("liga_inscricao"):
+        return
+    aptos = [m for m in d["equipo"] if not centro.internado(m) and int(m.get("hp", 1)) > 0]
+    if not aptos or (not forcar and (int(a.get("desafios", 0)) >= modos.DESAFIOS_DIA
+                                     or random.random() >= modos.DESAFIO_CHANCE)):
+        return
+    c = random.choice(modos.dados()["classes"])
+    formato = "duplas" if len(aptos) >= 2 and random.random() < 0.35 else "singles"
+    media = sum(m["nivel"] for m in aptos) // len(aptos)
+    nivel = max(2, min(ligas.cap_xp(d), media + random.randint(-2, 1)))
+    n = random.randint(2, 4) if formato == "duplas" else random.randint(1, 3)
+    time_ = [{"num": forma_no_nivel(x, nivel), "nivel": nivel}
+             for x in modos.sortear_especies(random, n, 0, 999, c["tipos"] or None)]
+    for x in time_:
+        pk_api.pokemon(x["num"])
+        pk_api.especie(x["num"])
+    pk_api.sprite_treinador(c["sprite"])
+    a["desafios"] = int(a.get("desafios", 0)) + 1
+    d["desafio"] = {"quien": modos._nome_treinador(random, c), "sprites": c["sprite"], "formato": formato,
+                    "time": time_, "nivel": nivel, "expira": time.time() + modos.DESAFIO_DURA}
+    sucesos.append({"tipo": "desafio", "quien": d["desafio"]["quien"], "formato": formato,
+                    "texto": f"{d['desafio']['quien']} quer batalhar!"})
+
+
+def expirar_desafio(d: dict) -> None:
+    e = d.get("desafio")
+    if e and time.time() > e.get("expira", 0):
+        d["desafio"] = None
+
+
+def cmd_desafio(args) -> int:
+    d = leer()
+    normalizar(d)
+    expirar_desafio(d)
+    e = d.get("desafio")
+    if not e:
+        guardar(d)
+        return _saida([{"tipo": "aviso", "texto": "O treinador já foi embora."}])
+    if args.acao == "recusar":
+        d["desafio"] = None
+        guardar(d)
+        return _saida([])
+    if batalha_ativa(d) or d.get("corrida"):
+        raise SystemExit("Termine a batalha atual antes de aceitar.")
+    meu = [_lutador_meu(m, q) for q, m in enumerate(d["equipo"])
+           if not centro.internado(m) and int(m.get("hp", 1)) > 0]
+    if not meu:
+        raise SystemExit("Ninguém do time pode lutar agora.")
+    rng = random.Random()
+    ini = [modos.lutador(x, nome_de(x["num"]), rng) for x in e["time"]]
+    for lut in meu:
+        for g in lut["golpes"]:
+            pk_api.golpe(g["id"])
+        pk_api.sprite_costas(lut["num"], lut.get("shiny"))
+    b, ev = motor.nova(meu, ini, {
+        "tipo": "modo", "modo": "avulso", "regiao": None, "alvo": "avulso", "cap": None, "etapa": None,
+        "formato": e["formato"], "treinador": e["quien"], "sprite_lista": e["sprites"], "ace": e["nivel"],
+        "rotulo": modos.TITULOS["avulso"], "premio": modos.premio(e["nivel"]) * 2, "tipo_treinador": "normal",
+        "fora": []})
+    d["batalha"], d["desafio"] = b, None
+    return _responder_batalha(d, ev, [])
+
+
+def _concluir(d: dict, b: dict, sucesos: list) -> None:
+    """Fim da batalha: XP (com cap), prêmio, insígnia, TM, Liga, Pokécenter."""
+    if b["tipo"] == "modo":
+        return _concluir_modo(d, b, sucesos)
+    reg = b["regiao"]
+    r = ligas.regiao(reg)
+    t = ligas.treinador(reg, b["alvo"])
+    res = {"resultado": b["fim"], "premio": 0, "xp": dict(b["xp"]), "insignia": None,
+           "tm": None, "campeao": False, "subiu": []}
+    _sync_hp(d, b)
+    cap = ligas.cap_xp(d)
+    antes = {i: m["nivel"] for i, m in enumerate(d["equipo"])}
+    for p, xp in b["xp"].items():
+        p = int(p)
+        if 0 <= p < len(d["equipo"]):
+            ganhar_xp(d["equipo"][p], p, int(xp), cap, sucesos)
+    pr = ligas.premio(t, [{"nivel": b["ace"]}], b["tipo"])
+    insc = (d.get("liga_inscricao") or {}).get(reg)
+    acabou_liga = False
+    participantes = [d["equipo"][int(p)] for p in b["xp"] if 0 <= int(p) < len(d["equipo"])]
+    for lut in b["meu"]:
+        if lut.get("_caiu") and lut["puesto"] < len(d["equipo"]):
+            ganhar_amizade(d["equipo"][lut["puesto"]], AMIZADE_DESMAIO)
+    if b["fim"] == "vitoria":
+        d["dinheiro"] = int(d.get("dinheiro", 0)) + pr
+        res["premio"] = pr
+        for m in participantes:
+            ganhar_amizade(m, AMIZADE_VITORIA + (AMIZADE_INSIGNIA if b["tipo"] == "ginasio" else 0))
+        if b["tipo"] == "ginasio":
+            ligas.prog(d, reg)["insignias"].append(t["id"])
+            res["insignia"] = t["insignia"]
+            if t.get("tm"):
+                dar_item(d, f"tm-{t['tm']}", 1)
+                res["tm"] = itens.info(f"tm-{t['tm']}")["nome"]
+            n = len(ligas.prog(d, reg)["insignias"])
+            sucesos.append({"tipo": "insignia", "regiao": reg, "tipo_lider": t["tipo"], "quien": t["nome"],
+                            "texto": f"Você ganhou a {t['insignia']}! ({n}/8 em {r['nome']})"})
+        elif b["tipo"] == "revanche":
+            pg = ligas.prog(d, reg)["revanches"]
+            pg[t["id"]] = int(pg.get(t["id"], 0)) + 1
+            sucesos.append({"tipo": "revanche", "texto": f"Revanche vencida contra {t['nome']}! +{pr} ₽"})
+        elif b["tipo"] == "liga" and insc is not None:
+            insc["etapa"] = int(insc.get("etapa", 0)) + 1
+            insc["pp"] = {str(l["puesto"]): {g["id"]: g["pp"] for g in l["golpes"]} for l in b["meu"]}
+            if insc["etapa"] >= 5:
+                acabou_liga = True
+                p = ligas.prog(d, reg)
+                p["campeao"] = int(p["campeao"]) + 1
+                res["campeao"] = True
+                for q in insc["puestos"]:
+                    if q < len(d["equipo"]):
+                        ganhar_amizade(d["equipo"][q], AMIZADE_LIGA)
+                d.setdefault("hall", []).append({
+                    "regiao": reg, "nome": r["nome"], "data": hoje(), "vez": p["campeao"],
+                    "time": [{"num": d["equipo"][q]["num"], "nivel": d["equipo"][q]["nivel"],
+                              "mote": d["equipo"][q].get("mote", ""), "shiny": bool(d["equipo"][q].get("shiny")),
+                              "genero": d["equipo"][q].get("genero", "-"),
+                              "golpes": [golpes.info(g)["nome"] for g in d["equipo"][q].get("golpes", [])]}
+                             for q in insc["puestos"] if q < len(d["equipo"])]})
+                sucesos.append({"tipo": "liga_vitoria", "regiao": reg,
+                                "texto": f"Você é o novo Campeão de {r['nome']}! Os lendários da região apareceram."})
+            else:
+                prox = r["elite4"][insc["etapa"]] if insc["etapa"] < 4 else r["campeao"]
+                sucesos.append({"tipo": "liga_etapa", "texto": f"{t['nome']} foi derrotado! Próximo: {prox['nome']}."})
+    else:
+        perda = min(int(d.get("dinheiro", 0)), pr // 2)
+        d["dinheiro"] = int(d.get("dinheiro", 0)) - perda
+        res["premio"] = -perda
+        sucesos.append({"tipo": "derrota", "texto": f"Você perdeu para {t['nome']}… (−{perda} ₽)"})
+        if b["tipo"] == "liga":
+            acabou_liga = True
+    if acabou_liga:
+        d.get("liga_inscricao", {}).pop(reg, None)
+        if not d.get("liga_inscricao"):
+            d.pop("liga_inscricao", None)
+    # derrotados vão ao Pokécenter (inscritos só quando a Liga acaba: aí
+    # entram todos os inscritos, inclusive quem caiu numa luta anterior)
+    quem = {lut["puesto"] for lut in b["meu"]}
+    if acabou_liga and insc:
+        quem |= set(insc.get("puestos", []))
+    for q in sorted(quem):
+        if q >= len(d["equipo"]):
+            continue
+        m = d["equipo"][q]
+        if int(m.get("hp", 1)) <= 0 and not inscrito(d, q):
+            centro.internar(m, stats.hp_max(m["num"], m["nivel"], m.get("naturaleza", "")))
+    res["subiu"] = [{"puesto": i, "quien": m.get("mote") or nome_de(m["num"]), "nivel": m["nivel"]}
+                    for i, m in enumerate(d["equipo"]) if m["nivel"] > antes.get(i, m["nivel"])]
+    b["resultado"] = res
+
+
+def _adornar_batalha(b: dict) -> dict:
+    if not b:
+        return b
+    b = json.loads(json.dumps(b))
+    for lut in b["meu"]:
+        lut["gif"] = pk_api.sprite_costas(lut["num"], lut.get("shiny"), baixar=False) \
+            or str(DIR_GIF / f"{lut['num']}.gif")
+        lut["costas"] = bool(pk_api.sprite_costas(lut["num"], lut.get("shiny"), baixar=False))
+        lut["golpes_info"] = [dict(golpes.info(g["id"]), pp_atual=g["pp"], pp_max=g["pp_max"]) for g in lut["golpes"]]
+        icone = DIR_GIF / f"{lut['num']}.gif"
+        lut["icone"] = str(icone if icone.exists() else DIR_PNG / f"{lut['num']}.png")
+    for lut in b["ini"]:
+        shiny = DIR_SHINY / f"{lut['num']}.gif"
+        gif = DIR_GIF / f"{lut['num']}.gif"
+        lut["gif"] = str(gif if gif.exists() else DIR_PNG / f"{lut['num']}.png")
+    t = (ligas.treinador(b["regiao"], b["alvo"]) or {}) if b["tipo"] != "modo" else {}
+    b["sprite_treinador"] = pk_api.sprite_treinador(b.get("sprite_lista") or t.get("sprite", []), baixar=False)
+    b["cenario"] = ("campo" if b.get("modo") == "avulso"
+                    else "ginasio" if b["tipo"] in ("ginasio", "revanche") or b.get("modo") == "bossrush"
+                    else "arena")
+    return b
+
+
+def _acao_item(d: dict, b: dict, item: str, i: int, pos: int) -> dict:
+    inf = itens.info(item)
+    if b.get("sem_itens"):
+        raise SystemExit("Nesta batalha não vale usar itens.")
+    if inf["cat"] != "cura":
+        raise SystemExit("Na batalha contra treinadores só vale item de cura.")
+    if not (0 <= i < len(b["meu"])):
+        raise SystemExit("Esse pokémon não está na batalha.")
+    alvo = b["meu"][i]
+    if alvo["hp"] <= 0:
+        raise SystemExit(f"{alvo['nome']} está derrotado: só o Pokécenter cura.")
+    if alvo["hp"] >= alvo["hp_max"]:
+        raise SystemExit(f"{alvo['nome']} já está com o HP cheio.")
+    if not tirar_item(d, item):
+        raise SystemExit(f"Você não tem {inf['nome']}.")
+    return {"tipo": "item", "pos": pos, "i": i, "cura": inf["cura"], "nome": inf["nome"]}
+
+
+def cmd_batalha(args) -> int:
+    d = leer()
+    normalizar(d)
+    sucesos: list = []
+    a = args.acao
+    if a == "iniciar":
+        if batalha_ativa(d):
+            raise SystemExit("Já há uma batalha em andamento.")
+        if d.get("corrida"):
+            raise SystemExit("Encerre a sequência em andamento na aba Batalhas.")
+        reg, alvo = args.x, args.y
+        if not reg or not alvo:
+            raise SystemExit("uso: batalha iniciar <regiao> <lider|liga|revanche:id>")
+        ds = ligas.desafio(d, reg, alvo)
+        t, cap = ds["treinador"], ds["cap"]
+        insc = (d.get("liga_inscricao") or {}).get(reg) if ds["tipo"] == "liga" else None
+        candidatos = insc["puestos"] if insc else list(range(len(d["equipo"])))
+        meu, fora = [], []
+        for q in candidatos:
+            if q >= len(d["equipo"]):
+                continue
+            m = d["equipo"][q]
+            quem = m.get("mote") or nome_de(m["num"])
+            if m["nivel"] > cap:
+                fora.append(f"{quem} (nv {m['nivel']}) passa do cap {cap}")
+            elif centro.internado(m):
+                fora.append(f"{quem} está no Pokécenter")
+            elif int(m.get("hp", 1)) <= 0:
+                fora.append(f"{quem} está derrotado")
+            else:
+                pp = (insc or {}).get("pp", {}).get(str(q))
+                meu.append(_lutador_meu(m, q, pp))
+        if not meu:
+            raise SystemExit("Ninguém pode lutar: " + "; ".join(fora) if fora else "Seu time está vazio.")
+        inimigos = []
+        for x in ds["time"]:
+            pk_api.pokemon(x["num"])
+            pk_api.especie(x["num"])
+            gs = golpes.iniciais(x["num"], x["nivel"])
+            for g in gs:
+                pk_api.golpe(g)
+            inimigos.append(motor.novo_lutador(x["num"], x["nivel"], "Seria", nome_de(x["num"]), gs,
+                                               genero=motor.sortear_genero(x["num"])))
+        for lut in meu:
+            for g in lut["golpes"]:
+                pk_api.golpe(g["id"])
+            pk_api.sprite_costas(lut["num"], lut.get("shiny"))
+        pk_api.sprite_treinador(t["sprite"])
+        titulo = {"ginasio": "Líder", "revanche": "Líder", "liga": "Elite 4" if ds["etapa"] is not None and ds["etapa"] < 4 else "Campeão"}[ds["tipo"]]
+        b, ev = motor.nova(meu, inimigos, {
+            "tipo": ds["tipo"], "regiao": reg, "alvo": t["id"], "cap": cap, "etapa": ds["etapa"],
+            "treinador": f"{titulo} {t['nome']}", "ace": max(x["nivel"] for x in ds["time"]),
+            "tipo_treinador": t["tipo"], "fora": fora}, potions=1 if ds["tipo"] != "liga" else 2)
+        if fora:
+            ev.insert(0, {"t": "txt", "txt": "Fora do desafio: " + "; ".join(fora) + "."})
+        d["batalha"] = b
+    elif a == "fechar":
+        if batalha_ativa(d):
+            raise SystemExit("A batalha ainda não acabou.")
+        d["batalha"] = None
+        guardar(d)
+        return _saida([])
+    else:
+        b = batalha_ativa(d)
+        if not b:
+            raise SystemExit("Não há batalha em andamento.")
+        if a == "golpe":
+            acao = {"tipo": "golpe", "pos": 0, "slot": int(args.x)}
+        elif a == "turno":
+            acao = [_acao_item(d, b, x["item"], int(x["i"]), int(x.get("pos", 0))) if x["tipo"] == "item" else x
+                    for x in json.loads(args.x)]
+        elif a == "trocar":
+            acao = {"tipo": "trocar", "pos": 0, "i": int(args.x)}
+        elif a == "desistir":
+            acao = {"tipo": "desistir"}
+        elif a == "item":
+            acao = _acao_item(d, b, args.x, int(args.y), 0)
+        else:
+            raise SystemExit("ação desconhecida")
+        ev = motor.turno(b, acao)
+        _sync_hp(d, b)
+        if b.get("fim"):
+            _concluir(d, b, sucesos)
+            if b["tipo"] == "liga" and b["fim"] == "vitoria" and not b["resultado"]["campeao"]:
+                pass
+    guardar(d)
+    print(json.dumps({"eventos": ev, "batalha": _adornar_batalha(d.get("batalha")),
+                      "nuevos": 0, "xp": 0, "sucesos": sucesos}, ensure_ascii=False))
+    return 0
+
+
+def cmd_liga(args) -> int:
+    d = leer()
+    normalizar(d)
+    if args.acao == "estado":
+        print(json.dumps(ligas.resumo(d, nome_de, _gif_de), ensure_ascii=False))
+        return 0
+    reg = args.regiao
+    r = ligas.regiao(reg)
+    if d.get("corrida"):
+        raise SystemExit("Encerre a sequência em andamento na aba Batalhas.")
+    if batalha_ativa(d):
+        raise SystemExit("Há uma batalha em andamento.")
+    if args.acao == "inscrever":
+        if len(ligas.prog(d, reg)["insignias"]) < 8:
+            raise SystemExit(f"A Liga de {r['nome']} exige as 8 insígnias.")
+        if (d.get("liga_inscricao") or {}).get(reg):
+            raise SystemExit("Já há uma equipe inscrita nessa Liga.")
+        if d.get("liga_inscricao"):
+            raise SystemExit("Já há uma equipe inscrita em outra Liga: termine aquela antes.")
+        puestos = sorted(set(int(x) for x in args.puestos))
+        if not 1 <= len(puestos) <= 6:
+            raise SystemExit("Inscreva de 1 a 6 pokémon.")
+        cap = ligas.ace_campeao(reg) + ligas.liga_bonus(d, reg)
+        for q in puestos:
+            m = _membro(d, q)
+            quem = m.get("mote") or nome_de(m["num"])
+            if m["nivel"] > cap:
+                raise SystemExit(f"{quem} (nv {m['nivel']}) passa do cap da Liga ({cap}).")
+            if centro.internado(m) or int(m.get("hp", 1)) <= 0:
+                raise SystemExit(f"{quem} precisa estar saudável para ser inscrito.")
+        d.setdefault("liga_inscricao", {})[reg] = {"puestos": puestos, "etapa": 0, "pp": {}, "desde": hoje()}
+        guardar(d)
+        return _saida([{"tipo": "liga", "texto": f"Equipe inscrita na Liga de {r['nome']}! "
+                                                 f"Primeiro desafio: {r['elite4'][0]['nome']}."}])
+    if args.acao == "cancelar":
+        insc = (d.get("liga_inscricao") or {}).get(reg)
+        if not insc:
+            raise SystemExit("Não há inscrição nessa Liga.")
+        if int(insc.get("etapa", 0)) > 0:
+            raise SystemExit("A Liga já começou: só termina vencendo ou perdendo.")
+        d["liga_inscricao"].pop(reg)
+        if not d["liga_inscricao"]:
+            d.pop("liga_inscricao")
+        guardar(d)
+        return _saida([{"tipo": "liga", "texto": "Inscrição cancelada."}])
+    raise SystemExit("ação desconhecida")
+
+
+def _gif_de(num: int) -> str:
+    g = DIR_GIF / f"{num}.gif"
+    return str(g if g.exists() else DIR_PNG / f"{num}.png")
+
+
+def lancar_lendario(d: dict, num: int, bola: str, sucesos: list) -> None:
+    achado = ligas.lendario(d, num)
+    if not achado:
+        raise SystemExit("Esse pokémon não é um lendário de nenhuma Liga.")
+    reg, x = achado
+    if ligas.prog(d, reg)["campeao"] <= 0:
+        raise SystemExit(f"Vença a Liga de {ligas.regiao(reg)['nome']} primeiro.")
+    e = ligas.estado_lendario(d, reg, num)
+    nome = nome_de(num)
+    if e["capturado"]:
+        raise SystemExit(f"Você já capturou {nome}.")
+    if e["tentativas"] >= ligas.LENDARIO_TENTATIVAS:
+        raise SystemExit(f"{nome} foi embora por hoje. Volte amanhã.")
+    if itens.info(bola)["cat"] != "bola":
+        raise SystemExit(f"{itens.info(bola)['nome']} não é uma bola.")
+    if not tirar_item(d, bola):
+        raise SystemExit(f"Você não tem {itens.info(bola)['nome']}.")
+    tipos_sel = ((tipos_de().get("pokemon") or {}).get(str(num))) or []
+    fator = itens.fator_bola(bola, e["tentativas"], x["nivel"], tipos_sel)
+    chance = 1.0 if bola == "master-ball" else min(0.95, ligas.LENDARIO_CHANCE * fator)
+    if random.random() < chance:
+        membro = novo_membro(num, x["nivel"], "lendario")
+        membro["bola"] = bola
+        onde = acolher(d, membro)
+        e["capturado"] = True
+        atividade_de(d)["capturas"] += 1
+        sucesos.append({"tipo": "captura", "num": num, "shiny": membro["shiny"], "quien": nome,
+                        "uno_de": SHINY_UNO_DE, "onde": onde, "lendario": True,
+                        "texto": f"Gotcha! {nome} foi capturado!" + (" (foi para a caixa)" if onde == "caixa" else "")})
+    else:
+        e["tentativas"] += 1
+        resta = ligas.LENDARIO_TENTATIVAS - e["tentativas"]
+        sucesos.append({"tipo": "escapou", "num": num,
+                        "texto": f"{nome} escapou da bola!" + (f" ({resta} tentativa{'s' if resta > 1 else ''} hoje)"
+                                                             if resta else " Ele foi embora… volte amanhã.")})
+
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("estado", help=tr("el equipo en JSON (lo lee el notch)",
+                                     "the team as JSON (read by the notch)",
+                                     "la squadra come JSON (letto dal notch)")).set_defaults(func=cmd_estado)
+    sub.add_parser("ver", help=tr("el equipo, legible", "the team in a readable format",
+                                  "la squadra, leggibile")).set_defaults(func=cmd_ver)
+    sub.add_parser("sync", help=tr("mira github y reparte experiencia",
+                                   "check GitHub and distribute experience",
+                                   "controlla GitHub e distribuisci l'esperienza")).set_defaults(func=cmd_sync)
+
+    pa = sub.add_parser("add", help=tr("mete un pokemon en el equipo", "add a Pokémon to the team",
+                                       "aggiungi un Pokémon alla squadra"))
+    pa.add_argument("pokemon")
+    pa.add_argument("--mote", help=tr("como quieres llamarlo", "what to call it", "come vuoi chiamarlo"))
+    pa.add_argument("--nivel", type=int, default=1)
+    pa.set_defaults(func=cmd_add)
+
+    pq = sub.add_parser("quitar", help=tr("saca a uno del equipo", "remove a Pokémon from the team",
+                                          "rimuovi un Pokémon dalla squadra"))
+    pq.add_argument("puesto", type=int)
+    pq.set_defaults(func=cmd_quitar)
+
+    pm = sub.add_parser("mote", help=tr("le cambia el nombre", "change its name", "cambia il suo nome"))
+    pm.add_argument("puesto", type=int)
+    pm.add_argument("nombre")
+    pm.set_defaults(func=cmd_mote)
+
+    pl = sub.add_parser("lider", help=tr("lo pone el primero", "make it the leader", "lo rende il leader"))
+    pl.add_argument("puesto", type=int)
+    pl.set_defaults(func=cmd_lider)
+
+    pv = sub.add_parser("mover", help=tr("cambia a uno de puesto (reordenar)",
+                                         "move a Pokémon to another slot (reorder)",
+                                         "muovi un Pokémon in un altro posto (riordinare)"))
+    pv.add_argument("de", type=int)
+    pv.add_argument("a", type=int)
+    pv.set_defaults(func=cmd_mover)
+
+    pe = sub.add_parser("evolucionar", help=tr("fuerza una evolucion pendiente", "trigger a pending evolution",
+                                               "attiva un'evoluzione in attesa"))
+    pe.add_argument("puesto", type=int)
+    pe.add_argument("a", nargs="?", help=tr("en cual, si hay varias", "which evolution, if there are several", "in quale, se ce ne sono diverse"))
+    pe.set_defaults(func=cmd_evolucionar)
+
+    ppv = sub.add_parser("evolucao-previa", help="o que cada evolução mudaria (JSON)")
+    ppv.add_argument("puesto", type=int)
+    ppv.set_defaults(func=cmd_evolucao_previa)
+
+    pg = sub.add_parser("guardar", help=tr("del equipo a la caja", "move from the team to the box", "sposta dalla squadra al box"))
+    pg.add_argument("puesto", type=int)
+    pg.set_defaults(func=cmd_guardar)
+
+    ps = sub.add_parser("sacar", help=tr("de la caja al equipo", "move from the box to the team", "sposta dal box alla squadra"))
+    ps.add_argument("indice", type=int)
+    ps.set_defaults(func=cmd_sacar)
+
+    ptr = sub.add_parser("trocar", help="troca um do time por um da caixa")
+    ptr.add_argument("puesto", type=int)
+    ptr.add_argument("indice", type=int)
+    ptr.set_defaults(func=cmd_trocar)
+
+    pev = sub.add_parser("evento", help="registra atividade: minuto, musica, app, wallpaper")
+    pev.add_argument("tipo", choices=("minuto", "companhia", "musica", "app", "wallpaper"))
+    pev.add_argument("--app", default="", help="classe da janela em foco")
+    pev.add_argument("--midia", action="store_true", help="música ou vídeo tocando neste minuto")
+    pev.add_argument("--forcar-encontro", action="store_true", help="teste: faz um selvagem aparecer")
+    pev.add_argument("--forcar-desafio", action="store_true", help="teste: faz um treinador aparecer")
+    pev.set_defaults(func=cmd_evento)
+    pln = sub.add_parser("lancar", help="joga uma bola no selvagem")
+    pln.add_argument("bola", nargs="?", default="poke-ball")
+    pln.add_argument("--lendario", type=int, help="número do lendário (depois da Liga)")
+    pln.set_defaults(func=cmd_lancar)
+    sub.add_parser("fugir", help="deixa o selvagem ir").set_defaults(func=cmd_fugir)
+    pbt = sub.add_parser("batalha", help="iniciar <regiao> <alvo> | golpe <slot> | trocar <i> | item <item> <i> | desistir | fechar")
+    pbt.add_argument("acao", choices=("iniciar", "golpe", "turno", "trocar", "item", "desistir", "fechar"))
+    pbt.add_argument("x", nargs="?")
+    pbt.add_argument("y", nargs="?")
+    pbt.set_defaults(func=cmd_batalha)
+    pmd = sub.add_parser("modos", help="estado | iniciar <modo> [formato] [regiao] | continuar | encerrar | comprar <item>")
+    pmd.add_argument("acao", choices=("estado", "iniciar", "continuar", "encerrar", "comprar"))
+    pmd.add_argument("x", nargs="?")
+    pmd.add_argument("y", nargs="?")
+    pmd.add_argument("z", nargs="?")
+    pmd.set_defaults(func=cmd_modos)
+    pdf = sub.add_parser("desafio", help="responde ao treinador avulso: aceitar | recusar")
+    pdf.add_argument("acao", choices=("aceitar", "recusar"))
+    pdf.set_defaults(func=cmd_desafio)
+    plg = sub.add_parser("liga", help="estado | inscrever <regiao> <puestos...> | cancelar <regiao>")
+    plg.add_argument("acao", choices=("estado", "inscrever", "cancelar"))
+    plg.add_argument("regiao", nargs="?")
+    plg.add_argument("puestos", nargs="*")
+    plg.set_defaults(func=cmd_liga)
+
+    # PokéIdle
+    pin = sub.add_parser("inicial", help="escolhe o pokémon inicial (primeira vez)")
+    pin.add_argument("especie")
+    pin.add_argument("--mote", default="")
+    pin.set_defaults(func=cmd_inicial)
+    pu = sub.add_parser("usar", help="usa um item: usar <item> [lugar] [--slot N] [--a especie]")
+    pu.add_argument("item")
+    pu.add_argument("puesto", nargs="?", type=int)
+    pu.add_argument("--slot", type=int)
+    pu.add_argument("--a", help="para pedras com mais de uma evolução (Eevee)")
+    pu.set_defaults(func=cmd_usar)
+    pc = sub.add_parser("comprar", help="compra na PokéMart: comprar <item> [qtd]")
+    pc.add_argument("item")
+    pc.add_argument("qtd", nargs="?", type=int, default=1)
+    pc.set_defaults(func=cmd_comprar)
+    pce = sub.add_parser("centro", help="leva ao Pokécenter")
+    pce.add_argument("puesto", type=int)
+    pce.set_defaults(func=cmd_centro)
+    pgs = sub.add_parser("golpes", help="golpes equipados e aprendíveis (JSON)")
+    pgs.add_argument("puesto", type=int)
+    pgs.set_defaults(func=cmd_golpes)
+    pg1 = sub.add_parser("golpe", help="equipa: golpe <lugar> <slot 0-3> <golpe>")
+    pg1.add_argument("puesto", type=int)
+    pg1.add_argument("slot", type=int)
+    pg1.add_argument("golpe")
+    pg1.set_defaults(func=cmd_golpe)
+    pdb = sub.add_parser("debug", help="testes: dano <lugar> <hp> | centro-ja | dinheiro <n> | item <item> <n>")
+    pdb.add_argument("acao", choices=("dano", "centro-ja", "dinheiro", "item"))
+    pdb.add_argument("puesto", nargs="?")
+    pdb.add_argument("valor", nargs="?")
+    pdb.set_defaults(func=cmd_debug)
+
+    for nombre, ayuda in (("repartir", tr("experiencia a partes iguales, como el objeto",
+                                          "share experience equally, like the item",
+                                          "condividi l'esperienza equamente, come l'oggetto")),
+                          ("pasear", tr("el lider pasea por el escritorio",
+                                        "the leader walks around the desktop",
+                                        "il leader cammina intorno al desktop"))):
+        pf = sub.add_parser(nombre, help=ayuda)
+        pf.add_argument("accion", choices=("on", "off", "toggle"))
+        pf.set_defaults(func=cmd_flag)
+
+    args = p.parse_args()
+    # The orders that TOUCH the save run under the lock. 'sync' is not on the
+    # list on purpose: it takes the lock itself after talking to the network, so
+    # the save is not locked during the request.
+    ESCRIBEN = {"batalha", "liga", "modos", "desafio", "trocar", "add", "quitar", "mote", "lider", "mover", "evolucionar",
+                "guardar", "sacar", "repartir", "pasear", "evento", "lancar", "fugir",
+                "usar", "comprar", "centro", "golpe", "debug", "inicial"}
+    if args.cmd in ESCRIBEN:
+        with partida():
+            return args.func(args)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (BrokenPipeError, KeyboardInterrupt):
+        os._exit(1)

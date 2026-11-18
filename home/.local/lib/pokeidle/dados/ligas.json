@@ -1,0 +1,3747 @@
+{
+ "ordem": [
+  "kanto",
+  "johto",
+  "hoenn",
+  "sinnoh",
+  "unova",
+  "kalos",
+  "alola",
+  "galar",
+  "paldea"
+ ],
+ "regioes": {
+  "kanto": {
+   "nome": "Kanto",
+   "jogo": "FireRed/LeafGreen",
+   "ginasios": [
+    {
+     "id": "brock",
+     "nome": "Brock",
+     "cidade": "Pewter",
+     "tipo": "rock",
+     "insignia": "Insígnia Rocha",
+     "tm": "rock-tomb",
+     "premio_base": 100,
+     "sprite": [
+      "brock"
+     ],
+     "time": [
+      {
+       "num": 74,
+       "nivel": 12
+      },
+      {
+       "num": 95,
+       "nivel": 14
+      }
+     ]
+    },
+    {
+     "id": "misty",
+     "nome": "Misty",
+     "cidade": "Cerulean",
+     "tipo": "water",
+     "insignia": "Insígnia Cascata",
+     "tm": "water-pulse",
+     "premio_base": 100,
+     "sprite": [
+      "misty"
+     ],
+     "time": [
+      {
+       "num": 120,
+       "nivel": 18
+      },
+      {
+       "num": 121,
+       "nivel": 21
+      }
+     ]
+    },
+    {
+     "id": "ltsurge",
+     "nome": "Lt. Surge",
+     "cidade": "Vermilion",
+     "tipo": "electric",
+     "insignia": "Insígnia Trovão",
+     "tm": "shock-wave",
+     "premio_base": 100,
+     "sprite": [
+      "ltsurge"
+     ],
+     "time": [
+      {
+       "num": 100,
+       "nivel": 21
+      },
+      {
+       "num": 25,
+       "nivel": 18
+      },
+      {
+       "num": 26,
+       "nivel": 24
+      }
+     ]
+    },
+    {
+     "id": "erika",
+     "nome": "Erika",
+     "cidade": "Celadon",
+     "tipo": "grass",
+     "insignia": "Insígnia Arco-Íris",
+     "tm": "giga-drain",
+     "premio_base": 100,
+     "sprite": [
+      "erika"
+     ],
+     "time": [
+      {
+       "num": 71,
+       "nivel": 29
+      },
+      {
+       "num": 114,
+       "nivel": 24
+      },
+      {
+       "num": 45,
+       "nivel": 29
+      }
+     ]
+    },
+    {
+     "id": "koga",
+     "nome": "Koga",
+     "cidade": "Fuchsia",
+     "tipo": "poison",
+     "insignia": "Insígnia Alma",
+     "tm": "toxic",
+     "premio_base": 100,
+     "sprite": [
+      "koga"
+     ],
+     "time": [
+      {
+       "num": 109,
+       "nivel": 37
+      },
+      {
+       "num": 89,
+       "nivel": 39
+      },
+      {
+       "num": 109,
+       "nivel": 37
+      },
+      {
+       "num": 110,
+       "nivel": 43
+      }
+     ]
+    },
+    {
+     "id": "sabrina",
+     "nome": "Sabrina",
+     "cidade": "Saffron",
+     "tipo": "psychic",
+     "insignia": "Insígnia Pântano",
+     "tm": "calm-mind",
+     "premio_base": 100,
+     "sprite": [
+      "sabrina"
+     ],
+     "time": [
+      {
+       "num": 64,
+       "nivel": 38
+      },
+      {
+       "num": 122,
+       "nivel": 37
+      },
+      {
+       "num": 49,
+       "nivel": 38
+      },
+      {
+       "num": 65,
+       "nivel": 43
+      }
+     ]
+    },
+    {
+     "id": "blaine",
+     "nome": "Blaine",
+     "cidade": "Cinnabar",
+     "tipo": "fire",
+     "insignia": "Insígnia Vulcão",
+     "tm": "overheat",
+     "premio_base": 100,
+     "sprite": [
+      "blaine"
+     ],
+     "time": [
+      {
+       "num": 58,
+       "nivel": 42
+      },
+      {
+       "num": 77,
+       "nivel": 40
+      },
+      {
+       "num": 78,
+       "nivel": 42
+      },
+      {
+       "num": 59,
+       "nivel": 47
+      }
+     ]
+    },
+    {
+     "id": "giovanni",
+     "nome": "Giovanni",
+     "cidade": "Viridian",
+     "tipo": "ground",
+     "insignia": "Insígnia Terra",
+     "tm": "earthquake",
+     "premio_base": 100,
+     "sprite": [
+      "giovanni"
+     ],
+     "time": [
+      {
+       "num": 111,
+       "nivel": 45
+      },
+      {
+       "num": 51,
+       "nivel": 42
+      },
+      {
+       "num": 31,
+       "nivel": 44
+      },
+      {
+       "num": 34,
+       "nivel": 45
+      },
+      {
+       "num": 111,
+       "nivel": 50
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "id": "lorelei",
+     "nome": "Lorelei",
+     "cidade": "",
+     "tipo": "ice",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "lorelei-gen3",
+      "lorelei"
+     ],
+     "time": [
+      {
+       "num": 87,
+       "nivel": 52
+      },
+      {
+       "num": 91,
+       "nivel": 51
+      },
+      {
+       "num": 80,
+       "nivel": 52
+      },
+      {
+       "num": 124,
+       "nivel": 54
+      },
+      {
+       "num": 131,
+       "nivel": 54
+      }
+     ]
+    },
+    {
+     "id": "bruno",
+     "nome": "Bruno",
+     "cidade": "",
+     "tipo": "fighting",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "bruno"
+     ],
+     "time": [
+      {
+       "num": 95,
+       "nivel": 51
+      },
+      {
+       "num": 107,
+       "nivel": 53
+      },
+      {
+       "num": 106,
+       "nivel": 53
+      },
+      {
+       "num": 95,
+       "nivel": 54
+      },
+      {
+       "num": 68,
+       "nivel": 56
+      }
+     ]
+    },
+    {
+     "id": "agatha",
+     "nome": "Agatha",
+     "cidade": "",
+     "tipo": "ghost",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "agatha-gen3",
+      "agatha"
+     ],
+     "time": [
+      {
+       "num": 94,
+       "nivel": 54
+      },
+      {
+       "num": 42,
+       "nivel": 54
+      },
+      {
+       "num": 93,
+       "nivel": 53
+      },
+      {
+       "num": 24,
+       "nivel": 56
+      },
+      {
+       "num": 94,
+       "nivel": 58
+      }
+     ]
+    },
+    {
+     "id": "lance",
+     "nome": "Lance",
+     "cidade": "",
+     "tipo": "dragon",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "lance"
+     ],
+     "time": [
+      {
+       "num": 130,
+       "nivel": 56
+      },
+      {
+       "num": 148,
+       "nivel": 54
+      },
+      {
+       "num": 148,
+       "nivel": 54
+      },
+      {
+       "num": 142,
+       "nivel": 58
+      },
+      {
+       "num": 149,
+       "nivel": 60
+      }
+     ]
+    }
+   ],
+   "campeao": {
+    "id": "blue",
+    "nome": "Blue",
+    "cidade": "",
+    "tipo": "normal",
+    "insignia": "",
+    "tm": null,
+    "premio_base": 200,
+    "sprite": [
+     "blue"
+    ],
+    "time": [
+     {
+      "num": 18,
+      "nivel": 59
+     },
+     {
+      "num": 65,
+      "nivel": 57
+     },
+     {
+      "num": 112,
+      "nivel": 59
+     },
+     {
+      "num": 103,
+      "nivel": 59
+     },
+     {
+      "num": 130,
+      "nivel": 61
+     },
+     {
+      "num": 6,
+      "nivel": 63
+     }
+    ]
+   },
+   "lendarios": [
+    {
+     "num": 144,
+     "nivel": 50
+    },
+    {
+     "num": 145,
+     "nivel": 50
+    },
+    {
+     "num": 146,
+     "nivel": 50
+    },
+    {
+     "num": 150,
+     "nivel": 70
+    }
+   ]
+  },
+  "johto": {
+   "nome": "Johto",
+   "jogo": "HeartGold/SoulSilver",
+   "ginasios": [
+    {
+     "id": "falkner",
+     "nome": "Falkner",
+     "cidade": "Violet",
+     "tipo": "flying",
+     "insignia": "Insígnia Zéfiro",
+     "tm": "roost",
+     "premio_base": 100,
+     "sprite": [
+      "falkner"
+     ],
+     "time": [
+      {
+       "num": 16,
+       "nivel": 9
+      },
+      {
+       "num": 17,
+       "nivel": 13
+      }
+     ]
+    },
+    {
+     "id": "bugsy",
+     "nome": "Bugsy",
+     "cidade": "Azalea",
+     "tipo": "bug",
+     "insignia": "Insígnia Colmeia",
+     "tm": "u-turn",
+     "premio_base": 100,
+     "sprite": [
+      "bugsy"
+     ],
+     "time": [
+      {
+       "num": 11,
+       "nivel": 15
+      },
+      {
+       "num": 14,
+       "nivel": 15
+      },
+      {
+       "num": 123,
+       "nivel": 17
+      }
+     ]
+    },
+    {
+     "id": "whitney",
+     "nome": "Whitney",
+     "cidade": "Goldenrod",
+     "tipo": "normal",
+     "insignia": "Insígnia Planície",
+     "tm": "attract",
+     "premio_base": 100,
+     "sprite": [
+      "whitney"
+     ],
+     "time": [
+      {
+       "num": 35,
+       "nivel": 17
+      },
+      {
+       "num": 241,
+       "nivel": 19
+      }
+     ]
+    },
+    {
+     "id": "morty",
+     "nome": "Morty",
+     "cidade": "Ecruteak",
+     "tipo": "ghost",
+     "insignia": "Insígnia Névoa",
+     "tm": "shadow-ball",
+     "premio_base": 100,
+     "sprite": [
+      "morty"
+     ],
+     "time": [
+      {
+       "num": 92,
+       "nivel": 21
+      },
+      {
+       "num": 93,
+       "nivel": 21
+      },
+      {
+       "num": 93,
+       "nivel": 23
+      },
+      {
+       "num": 94,
+       "nivel": 25
+      }
+     ]
+    },
+    {
+     "id": "chuck",
+     "nome": "Chuck",
+     "cidade": "Cianwood",
+     "tipo": "fighting",
+     "insignia": "Insígnia Tempestade",
+     "tm": "focus-punch",
+     "premio_base": 100,
+     "sprite": [
+      "chuck"
+     ],
+     "time": [
+      {
+       "num": 57,
+       "nivel": 27
+      },
+      {
+       "num": 62,
+       "nivel": 30
+      }
+     ]
+    },
+    {
+     "id": "jasmine",
+     "nome": "Jasmine",
+     "cidade": "Olivine",
+     "tipo": "steel",
+     "insignia": "Insígnia Mineral",
+     "tm": "iron-tail",
+     "premio_base": 100,
+     "sprite": [
+      "jasmine"
+     ],
+     "time": [
+      {
+       "num": 81,
+       "nivel": 30
+      },
+      {
+       "num": 81,
+       "nivel": 30
+      },
+      {
+       "num": 208,
+       "nivel": 35
+      }
+     ]
+    },
+    {
+     "id": "pryce",
+     "nome": "Pryce",
+     "cidade": "Mahogany",
+     "tipo": "ice",
+     "insignia": "Insígnia Geleira",
+     "tm": "avalanche",
+     "premio_base": 100,
+     "sprite": [
+      "pryce"
+     ],
+     "time": [
+      {
+       "num": 86,
+       "nivel": 30
+      },
+      {
+       "num": 87,
+       "nivel": 32
+      },
+      {
+       "num": 221,
+       "nivel": 34
+      }
+     ]
+    },
+    {
+     "id": "clair",
+     "nome": "Clair",
+     "cidade": "Blackthorn",
+     "tipo": "dragon",
+     "insignia": "Insígnia Ascensão",
+     "tm": "dragon-pulse",
+     "premio_base": 100,
+     "sprite": [
+      "clair"
+     ],
+     "time": [
+      {
+       "num": 130,
+       "nivel": 38
+      },
+      {
+       "num": 148,
+       "nivel": 38
+      },
+      {
+       "num": 148,
+       "nivel": 38
+      },
+      {
+       "num": 230,
+       "nivel": 41
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "id": "will",
+     "nome": "Will",
+     "cidade": "",
+     "tipo": "psychic",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "will"
+     ],
+     "time": [
+      {
+       "num": 178,
+       "nivel": 40
+      },
+      {
+       "num": 124,
+       "nivel": 41
+      },
+      {
+       "num": 103,
+       "nivel": 41
+      },
+      {
+       "num": 80,
+       "nivel": 41
+      },
+      {
+       "num": 178,
+       "nivel": 42
+      }
+     ]
+    },
+    {
+     "id": "koga",
+     "nome": "Koga",
+     "cidade": "",
+     "tipo": "poison",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "koga"
+     ],
+     "time": [
+      {
+       "num": 168,
+       "nivel": 40
+      },
+      {
+       "num": 49,
+       "nivel": 41
+      },
+      {
+       "num": 205,
+       "nivel": 43
+      },
+      {
+       "num": 89,
+       "nivel": 42
+      },
+      {
+       "num": 169,
+       "nivel": 44
+      }
+     ]
+    },
+    {
+     "id": "bruno",
+     "nome": "Bruno",
+     "cidade": "",
+     "tipo": "fighting",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "bruno"
+     ],
+     "time": [
+      {
+       "num": 237,
+       "nivel": 42
+      },
+      {
+       "num": 106,
+       "nivel": 42
+      },
+      {
+       "num": 107,
+       "nivel": 42
+      },
+      {
+       "num": 95,
+       "nivel": 43
+      },
+      {
+       "num": 68,
+       "nivel": 46
+      }
+     ]
+    },
+    {
+     "id": "karen",
+     "nome": "Karen",
+     "cidade": "",
+     "tipo": "dark",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "karen"
+     ],
+     "time": [
+      {
+       "num": 197,
+       "nivel": 42
+      },
+      {
+       "num": 45,
+       "nivel": 42
+      },
+      {
+       "num": 198,
+       "nivel": 44
+      },
+      {
+       "num": 94,
+       "nivel": 45
+      },
+      {
+       "num": 229,
+       "nivel": 47
+      }
+     ]
+    }
+   ],
+   "campeao": {
+    "id": "lance",
+    "nome": "Lance",
+    "cidade": "",
+    "tipo": "dragon",
+    "insignia": "",
+    "tm": null,
+    "premio_base": 200,
+    "sprite": [
+     "lance"
+    ],
+    "time": [
+     {
+      "num": 130,
+      "nivel": 44
+     },
+     {
+      "num": 149,
+      "nivel": 47
+     },
+     {
+      "num": 149,
+      "nivel": 47
+     },
+     {
+      "num": 142,
+      "nivel": 46
+     },
+     {
+      "num": 6,
+      "nivel": 46
+     },
+     {
+      "num": 149,
+      "nivel": 50
+     }
+    ]
+   },
+   "lendarios": [
+    {
+     "num": 243,
+     "nivel": 50
+    },
+    {
+     "num": 244,
+     "nivel": 50
+    },
+    {
+     "num": 245,
+     "nivel": 50
+    },
+    {
+     "num": 249,
+     "nivel": 70
+    },
+    {
+     "num": 250,
+     "nivel": 70
+    }
+   ]
+  },
+  "hoenn": {
+   "nome": "Hoenn",
+   "jogo": "Omega Ruby/Alpha Sapphire",
+   "ginasios": [
+    {
+     "id": "roxanne",
+     "nome": "Roxanne",
+     "cidade": "Rustboro",
+     "tipo": "rock",
+     "insignia": "Insígnia Pedra",
+     "tm": "rock-tomb",
+     "premio_base": 100,
+     "sprite": [
+      "roxanne"
+     ],
+     "time": [
+      {
+       "num": 74,
+       "nivel": 12
+      },
+      {
+       "num": 299,
+       "nivel": 14
+      }
+     ]
+    },
+    {
+     "id": "brawly",
+     "nome": "Brawly",
+     "cidade": "Dewford",
+     "tipo": "fighting",
+     "insignia": "Insígnia Punho",
+     "tm": "bulk-up",
+     "premio_base": 100,
+     "sprite": [
+      "brawly"
+     ],
+     "time": [
+      {
+       "num": 66,
+       "nivel": 14
+      },
+      {
+       "num": 296,
+       "nivel": 16
+      }
+     ]
+    },
+    {
+     "id": "wattson",
+     "nome": "Wattson",
+     "cidade": "Mauville",
+     "tipo": "electric",
+     "insignia": "Insígnia Dínamo",
+     "tm": "shock-wave",
+     "premio_base": 100,
+     "sprite": [
+      "wattson"
+     ],
+     "time": [
+      {
+       "num": 100,
+       "nivel": 20
+      },
+      {
+       "num": 309,
+       "nivel": 20
+      },
+      {
+       "num": 82,
+       "nivel": 22
+      },
+      {
+       "num": 310,
+       "nivel": 24
+      }
+     ]
+    },
+    {
+     "id": "flannery",
+     "nome": "Flannery",
+     "cidade": "Lavaridge",
+     "tipo": "fire",
+     "insignia": "Insígnia Calor",
+     "tm": "overheat",
+     "premio_base": 100,
+     "sprite": [
+      "flannery"
+     ],
+     "time": [
+      {
+       "num": 218,
+       "nivel": 26
+      },
+      {
+       "num": 322,
+       "nivel": 26
+      },
+      {
+       "num": 324,
+       "nivel": 29
+      }
+     ]
+    },
+    {
+     "id": "norman",
+     "nome": "Norman",
+     "cidade": "Petalburg",
+     "tipo": "normal",
+     "insignia": "Insígnia Equilíbrio",
+     "tm": "facade",
+     "premio_base": 100,
+     "sprite": [
+      "norman"
+     ],
+     "time": [
+      {
+       "num": 327,
+       "nivel": 27
+      },
+      {
+       "num": 288,
+       "nivel": 27
+      },
+      {
+       "num": 264,
+       "nivel": 29
+      },
+      {
+       "num": 289,
+       "nivel": 31
+      }
+     ]
+    },
+    {
+     "id": "winona",
+     "nome": "Winona",
+     "cidade": "Fortree",
+     "tipo": "flying",
+     "insignia": "Insígnia Pena",
+     "tm": "aerial-ace",
+     "premio_base": 100,
+     "sprite": [
+      "winona"
+     ],
+     "time": [
+      {
+       "num": 333,
+       "nivel": 29
+      },
+      {
+       "num": 357,
+       "nivel": 29
+      },
+      {
+       "num": 279,
+       "nivel": 30
+      },
+      {
+       "num": 227,
+       "nivel": 31
+      },
+      {
+       "num": 334,
+       "nivel": 33
+      }
+     ]
+    },
+    {
+     "id": "tateliza",
+     "nome": "Tate & Liza",
+     "cidade": "Mossdeep",
+     "tipo": "psychic",
+     "insignia": "Insígnia Mente",
+     "tm": "calm-mind",
+     "premio_base": 100,
+     "sprite": [
+      "tate",
+      "liza"
+     ],
+     "time": [
+      {
+       "num": 337,
+       "nivel": 41
+      },
+      {
+       "num": 338,
+       "nivel": 42
+      }
+     ]
+    },
+    {
+     "id": "wallace",
+     "nome": "Wallace",
+     "cidade": "Sootopolis",
+     "tipo": "water",
+     "insignia": "Insígnia Chuva",
+     "tm": "water-pulse",
+     "premio_base": 100,
+     "sprite": [
+      "wallace"
+     ],
+     "time": [
+      {
+       "num": 370,
+       "nivel": 41
+      },
+      {
+       "num": 340,
+       "nivel": 41
+      },
+      {
+       "num": 364,
+       "nivel": 41
+      },
+      {
+       "num": 119,
+       "nivel": 41
+      },
+      {
+       "num": 350,
+       "nivel": 43
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "id": "sidney",
+     "nome": "Sidney",
+     "cidade": "",
+     "tipo": "dark",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "sidney"
+     ],
+     "time": [
+      {
+       "num": 262,
+       "nivel": 50
+      },
+      {
+       "num": 275,
+       "nivel": 50
+      },
+      {
+       "num": 332,
+       "nivel": 50
+      },
+      {
+       "num": 342,
+       "nivel": 50
+      },
+      {
+       "num": 359,
+       "nivel": 52
+      }
+     ]
+    },
+    {
+     "id": "phoebe",
+     "nome": "Phoebe",
+     "cidade": "",
+     "tipo": "ghost",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "phoebe-gen3",
+      "phoebe-gen6",
+      "phoebe"
+     ],
+     "time": [
+      {
+       "num": 356,
+       "nivel": 51
+      },
+      {
+       "num": 354,
+       "nivel": 51
+      },
+      {
+       "num": 302,
+       "nivel": 52
+      },
+      {
+       "num": 354,
+       "nivel": 51
+      },
+      {
+       "num": 477,
+       "nivel": 53
+      }
+     ]
+    },
+    {
+     "id": "glacia",
+     "nome": "Glacia",
+     "cidade": "",
+     "tipo": "ice",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "glacia"
+     ],
+     "time": [
+      {
+       "num": 362,
+       "nivel": 52
+      },
+      {
+       "num": 478,
+       "nivel": 53
+      },
+      {
+       "num": 362,
+       "nivel": 52
+      },
+      {
+       "num": 478,
+       "nivel": 53
+      },
+      {
+       "num": 365,
+       "nivel": 54
+      }
+     ]
+    },
+    {
+     "id": "drake",
+     "nome": "Drake",
+     "cidade": "",
+     "tipo": "dragon",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "drake-gen3",
+      "drake-gen6",
+      "drake"
+     ],
+     "time": [
+      {
+       "num": 334,
+       "nivel": 54
+      },
+      {
+       "num": 372,
+       "nivel": 53
+      },
+      {
+       "num": 330,
+       "nivel": 53
+      },
+      {
+       "num": 230,
+       "nivel": 53
+      },
+      {
+       "num": 373,
+       "nivel": 55
+      }
+     ]
+    }
+   ],
+   "campeao": {
+    "id": "steven",
+    "nome": "Steven",
+    "cidade": "",
+    "tipo": "steel",
+    "insignia": "",
+    "tm": null,
+    "premio_base": 200,
+    "sprite": [
+     "steven"
+    ],
+    "time": [
+     {
+      "num": 227,
+      "nivel": 57
+     },
+     {
+      "num": 344,
+      "nivel": 57
+     },
+     {
+      "num": 306,
+      "nivel": 57
+     },
+     {
+      "num": 346,
+      "nivel": 57
+     },
+     {
+      "num": 348,
+      "nivel": 57
+     },
+     {
+      "num": 376,
+      "nivel": 59
+     }
+    ]
+   },
+   "lendarios": [
+    {
+     "num": 377,
+     "nivel": 50
+    },
+    {
+     "num": 378,
+     "nivel": 50
+    },
+    {
+     "num": 379,
+     "nivel": 50
+    },
+    {
+     "num": 380,
+     "nivel": 50
+    },
+    {
+     "num": 381,
+     "nivel": 50
+    },
+    {
+     "num": 382,
+     "nivel": 70
+    },
+    {
+     "num": 383,
+     "nivel": 70
+    },
+    {
+     "num": 384,
+     "nivel": 70
+    }
+   ]
+  },
+  "sinnoh": {
+   "nome": "Sinnoh",
+   "jogo": "Platinum",
+   "ginasios": [
+    {
+     "id": "roark",
+     "nome": "Roark",
+     "cidade": "Oreburgh",
+     "tipo": "rock",
+     "insignia": "Insígnia Carvão",
+     "tm": "stealth-rock",
+     "premio_base": 100,
+     "sprite": [
+      "roark"
+     ],
+     "time": [
+      {
+       "num": 74,
+       "nivel": 12
+      },
+      {
+       "num": 95,
+       "nivel": 12
+      },
+      {
+       "num": 408,
+       "nivel": 14
+      }
+     ]
+    },
+    {
+     "id": "gardenia",
+     "nome": "Gardenia",
+     "cidade": "Eterna",
+     "tipo": "grass",
+     "insignia": "Insígnia Floresta",
+     "tm": "grass-knot",
+     "premio_base": 100,
+     "sprite": [
+      "gardenia"
+     ],
+     "time": [
+      {
+       "num": 420,
+       "nivel": 19
+      },
+      {
+       "num": 387,
+       "nivel": 19
+      },
+      {
+       "num": 407,
+       "nivel": 22
+      }
+     ]
+    },
+    {
+     "id": "fantina",
+     "nome": "Fantina",
+     "cidade": "Hearthome",
+     "tipo": "ghost",
+     "insignia": "Insígnia Relíquia",
+     "tm": "shadow-claw",
+     "premio_base": 100,
+     "sprite": [
+      "fantina"
+     ],
+     "time": [
+      {
+       "num": 355,
+       "nivel": 24
+      },
+      {
+       "num": 93,
+       "nivel": 24
+      },
+      {
+       "num": 429,
+       "nivel": 26
+      }
+     ]
+    },
+    {
+     "id": "maylene",
+     "nome": "Maylene",
+     "cidade": "Veilstone",
+     "tipo": "fighting",
+     "insignia": "Insígnia Paralelepípedo",
+     "tm": "drain-punch",
+     "premio_base": 100,
+     "sprite": [
+      "maylene"
+     ],
+     "time": [
+      {
+       "num": 307,
+       "nivel": 28
+      },
+      {
+       "num": 67,
+       "nivel": 29
+      },
+      {
+       "num": 448,
+       "nivel": 32
+      }
+     ]
+    },
+    {
+     "id": "crasherwake",
+     "nome": "Crasher Wake",
+     "cidade": "Pastoria",
+     "tipo": "water",
+     "insignia": "Insígnia Pântano",
+     "tm": "brine",
+     "premio_base": 100,
+     "sprite": [
+      "crasherwake"
+     ],
+     "time": [
+      {
+       "num": 130,
+       "nivel": 33
+      },
+      {
+       "num": 195,
+       "nivel": 34
+      },
+      {
+       "num": 419,
+       "nivel": 37
+      }
+     ]
+    },
+    {
+     "id": "byron",
+     "nome": "Byron",
+     "cidade": "Canalave",
+     "tipo": "steel",
+     "insignia": "Insígnia Mina",
+     "tm": "flash-cannon",
+     "premio_base": 100,
+     "sprite": [
+      "byron"
+     ],
+     "time": [
+      {
+       "num": 82,
+       "nivel": 37
+      },
+      {
+       "num": 208,
+       "nivel": 38
+      },
+      {
+       "num": 411,
+       "nivel": 41
+      }
+     ]
+    },
+    {
+     "id": "candice",
+     "nome": "Candice",
+     "cidade": "Snowpoint",
+     "tipo": "ice",
+     "insignia": "Insígnia Pingente",
+     "tm": "avalanche",
+     "premio_base": 100,
+     "sprite": [
+      "candice"
+     ],
+     "time": [
+      {
+       "num": 215,
+       "nivel": 40
+      },
+      {
+       "num": 221,
+       "nivel": 40
+      },
+      {
+       "num": 460,
+       "nivel": 42
+      },
+      {
+       "num": 478,
+       "nivel": 44
+      }
+     ]
+    },
+    {
+     "id": "volkner",
+     "nome": "Volkner",
+     "cidade": "Sunyshore",
+     "tipo": "electric",
+     "insignia": "Insígnia Farol",
+     "tm": "charge-beam",
+     "premio_base": 100,
+     "sprite": [
+      "volkner"
+     ],
+     "time": [
+      {
+       "num": 135,
+       "nivel": 46
+      },
+      {
+       "num": 26,
+       "nivel": 46
+      },
+      {
+       "num": 405,
+       "nivel": 48
+      },
+      {
+       "num": 466,
+       "nivel": 50
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "id": "aaron",
+     "nome": "Aaron",
+     "cidade": "",
+     "tipo": "bug",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "aaron"
+     ],
+     "time": [
+      {
+       "num": 269,
+       "nivel": 53
+      },
+      {
+       "num": 267,
+       "nivel": 53
+      },
+      {
+       "num": 416,
+       "nivel": 54
+      },
+      {
+       "num": 214,
+       "nivel": 54
+      },
+      {
+       "num": 452,
+       "nivel": 57
+      }
+     ]
+    },
+    {
+     "id": "bertha",
+     "nome": "Bertha",
+     "cidade": "",
+     "tipo": "ground",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "bertha"
+     ],
+     "time": [
+      {
+       "num": 340,
+       "nivel": 55
+      },
+      {
+       "num": 472,
+       "nivel": 56
+      },
+      {
+       "num": 450,
+       "nivel": 55
+      },
+      {
+       "num": 76,
+       "nivel": 56
+      },
+      {
+       "num": 464,
+       "nivel": 59
+      }
+     ]
+    },
+    {
+     "id": "flint",
+     "nome": "Flint",
+     "cidade": "",
+     "tipo": "fire",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "flint"
+     ],
+     "time": [
+      {
+       "num": 229,
+       "nivel": 58
+      },
+      {
+       "num": 136,
+       "nivel": 57
+      },
+      {
+       "num": 78,
+       "nivel": 58
+      },
+      {
+       "num": 392,
+       "nivel": 61
+      },
+      {
+       "num": 467,
+       "nivel": 61
+      }
+     ]
+    },
+    {
+     "id": "lucian",
+     "nome": "Lucian",
+     "cidade": "",
+     "tipo": "psychic",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "lucian"
+     ],
+     "time": [
+      {
+       "num": 122,
+       "nivel": 59
+      },
+      {
+       "num": 203,
+       "nivel": 59
+      },
+      {
+       "num": 308,
+       "nivel": 60
+      },
+      {
+       "num": 65,
+       "nivel": 60
+      },
+      {
+       "num": 437,
+       "nivel": 63
+      }
+     ]
+    }
+   ],
+   "campeao": {
+    "id": "cynthia",
+    "nome": "Cynthia",
+    "cidade": "",
+    "tipo": "dragon",
+    "insignia": "",
+    "tm": null,
+    "premio_base": 200,
+    "sprite": [
+     "cynthia"
+    ],
+    "time": [
+     {
+      "num": 442,
+      "nivel": 58
+     },
+     {
+      "num": 407,
+      "nivel": 58
+     },
+     {
+      "num": 468,
+      "nivel": 60
+     },
+     {
+      "num": 448,
+      "nivel": 60
+     },
+     {
+      "num": 350,
+      "nivel": 58
+     },
+     {
+      "num": 445,
+      "nivel": 62
+     }
+    ]
+   },
+   "lendarios": [
+    {
+     "num": 480,
+     "nivel": 50
+    },
+    {
+     "num": 481,
+     "nivel": 50
+    },
+    {
+     "num": 482,
+     "nivel": 50
+    },
+    {
+     "num": 485,
+     "nivel": 50
+    },
+    {
+     "num": 488,
+     "nivel": 50
+    },
+    {
+     "num": 483,
+     "nivel": 70
+    },
+    {
+     "num": 484,
+     "nivel": 70
+    },
+    {
+     "num": 487,
+     "nivel": 70
+    }
+   ]
+  },
+  "unova": {
+   "nome": "Unova",
+   "jogo": "Black/White (Liga de B2/W2)",
+   "ginasios": [
+    {
+     "id": "cilan",
+     "nome": "Cilan",
+     "cidade": "Striaton",
+     "tipo": "grass",
+     "insignia": "Insígnia Trio",
+     "tm": "work-up",
+     "premio_base": 100,
+     "sprite": [
+      "cilan"
+     ],
+     "time": [
+      {
+       "num": 506,
+       "nivel": 12
+      },
+      {
+       "num": 511,
+       "nivel": 14
+      }
+     ]
+    },
+    {
+     "id": "lenora",
+     "nome": "Lenora",
+     "cidade": "Nacrene",
+     "tipo": "normal",
+     "insignia": "Insígnia Básica",
+     "tm": "retaliate",
+     "premio_base": 100,
+     "sprite": [
+      "lenora"
+     ],
+     "time": [
+      {
+       "num": 507,
+       "nivel": 18
+      },
+      {
+       "num": 505,
+       "nivel": 20
+      }
+     ]
+    },
+    {
+     "id": "burgh",
+     "nome": "Burgh",
+     "cidade": "Castelia",
+     "tipo": "bug",
+     "insignia": "Insígnia Inseto",
+     "tm": "struggle-bug",
+     "premio_base": 100,
+     "sprite": [
+      "burgh"
+     ],
+     "time": [
+      {
+       "num": 544,
+       "nivel": 21
+      },
+      {
+       "num": 557,
+       "nivel": 21
+      },
+      {
+       "num": 542,
+       "nivel": 23
+      }
+     ]
+    },
+    {
+     "id": "elesa",
+     "nome": "Elesa",
+     "cidade": "Nimbasa",
+     "tipo": "electric",
+     "insignia": "Insígnia Raio",
+     "tm": "volt-switch",
+     "premio_base": 100,
+     "sprite": [
+      "elesa"
+     ],
+     "time": [
+      {
+       "num": 587,
+       "nivel": 25
+      },
+      {
+       "num": 587,
+       "nivel": 25
+      },
+      {
+       "num": 523,
+       "nivel": 27
+      }
+     ]
+    },
+    {
+     "id": "clay",
+     "nome": "Clay",
+     "cidade": "Driftveil",
+     "tipo": "ground",
+     "insignia": "Insígnia Tremor",
+     "tm": "bulldoze",
+     "premio_base": 100,
+     "sprite": [
+      "clay"
+     ],
+     "time": [
+      {
+       "num": 552,
+       "nivel": 29
+      },
+      {
+       "num": 536,
+       "nivel": 29
+      },
+      {
+       "num": 530,
+       "nivel": 31
+      }
+     ]
+    },
+    {
+     "id": "skyla",
+     "nome": "Skyla",
+     "cidade": "Mistralton",
+     "tipo": "flying",
+     "insignia": "Insígnia Jato",
+     "tm": "acrobatics",
+     "premio_base": 100,
+     "sprite": [
+      "skyla"
+     ],
+     "time": [
+      {
+       "num": 528,
+       "nivel": 33
+      },
+      {
+       "num": 521,
+       "nivel": 33
+      },
+      {
+       "num": 581,
+       "nivel": 35
+      }
+     ]
+    },
+    {
+     "id": "brycen",
+     "nome": "Brycen",
+     "cidade": "Icirrus",
+     "tipo": "ice",
+     "insignia": "Insígnia Congelamento",
+     "tm": "frost-breath",
+     "premio_base": 100,
+     "sprite": [
+      "brycen"
+     ],
+     "time": [
+      {
+       "num": 583,
+       "nivel": 37
+      },
+      {
+       "num": 615,
+       "nivel": 37
+      },
+      {
+       "num": 614,
+       "nivel": 39
+      }
+     ]
+    },
+    {
+     "id": "drayden",
+     "nome": "Drayden",
+     "cidade": "Opelucid",
+     "tipo": "dragon",
+     "insignia": "Insígnia Lenda",
+     "tm": "dragon-tail",
+     "premio_base": 100,
+     "sprite": [
+      "drayden"
+     ],
+     "time": [
+      {
+       "num": 611,
+       "nivel": 41
+      },
+      {
+       "num": 621,
+       "nivel": 41
+      },
+      {
+       "num": 612,
+       "nivel": 43
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "id": "shauntal",
+     "nome": "Shauntal",
+     "cidade": "",
+     "tipo": "ghost",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "shauntal"
+     ],
+     "time": [
+      {
+       "num": 563,
+       "nivel": 56
+      },
+      {
+       "num": 426,
+       "nivel": 56
+      },
+      {
+       "num": 623,
+       "nivel": 56
+      },
+      {
+       "num": 609,
+       "nivel": 58
+      }
+     ]
+    },
+    {
+     "id": "grimsley",
+     "nome": "Grimsley",
+     "cidade": "",
+     "tipo": "dark",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "grimsley"
+     ],
+     "time": [
+      {
+       "num": 560,
+       "nivel": 56
+      },
+      {
+       "num": 510,
+       "nivel": 56
+      },
+      {
+       "num": 553,
+       "nivel": 56
+      },
+      {
+       "num": 625,
+       "nivel": 58
+      }
+     ]
+    },
+    {
+     "id": "caitlin",
+     "nome": "Caitlin",
+     "cidade": "",
+     "tipo": "psychic",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "caitlin"
+     ],
+     "time": [
+      {
+       "num": 518,
+       "nivel": 56
+      },
+      {
+       "num": 561,
+       "nivel": 56
+      },
+      {
+       "num": 579,
+       "nivel": 56
+      },
+      {
+       "num": 576,
+       "nivel": 58
+      }
+     ]
+    },
+    {
+     "id": "marshal",
+     "nome": "Marshal",
+     "cidade": "",
+     "tipo": "fighting",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "marshal"
+     ],
+     "time": [
+      {
+       "num": 538,
+       "nivel": 56
+      },
+      {
+       "num": 539,
+       "nivel": 56
+      },
+      {
+       "num": 620,
+       "nivel": 56
+      },
+      {
+       "num": 534,
+       "nivel": 58
+      }
+     ]
+    }
+   ],
+   "campeao": {
+    "id": "iris",
+    "nome": "Iris",
+    "cidade": "",
+    "tipo": "dragon",
+    "insignia": "",
+    "tm": null,
+    "premio_base": 200,
+    "sprite": [
+     "iris"
+    ],
+    "time": [
+     {
+      "num": 635,
+      "nivel": 57
+     },
+     {
+      "num": 621,
+      "nivel": 57
+     },
+     {
+      "num": 131,
+      "nivel": 57
+     },
+     {
+      "num": 306,
+      "nivel": 57
+     },
+     {
+      "num": 567,
+      "nivel": 57
+     },
+     {
+      "num": 612,
+      "nivel": 59
+     }
+    ]
+   },
+   "lendarios": [
+    {
+     "num": 638,
+     "nivel": 50
+    },
+    {
+     "num": 639,
+     "nivel": 50
+    },
+    {
+     "num": 640,
+     "nivel": 50
+    },
+    {
+     "num": 643,
+     "nivel": 60
+    },
+    {
+     "num": 644,
+     "nivel": 60
+    },
+    {
+     "num": 646,
+     "nivel": 70
+    }
+   ]
+  },
+  "kalos": {
+   "nome": "Kalos",
+   "jogo": "X/Y",
+   "ginasios": [
+    {
+     "id": "viola",
+     "nome": "Viola",
+     "cidade": "Santalune",
+     "tipo": "bug",
+     "insignia": "Insígnia Inseto",
+     "tm": "infestation",
+     "premio_base": 100,
+     "sprite": [
+      "viola"
+     ],
+     "time": [
+      {
+       "num": 283,
+       "nivel": 10
+      },
+      {
+       "num": 666,
+       "nivel": 12
+      }
+     ]
+    },
+    {
+     "id": "grant",
+     "nome": "Grant",
+     "cidade": "Cyllage",
+     "tipo": "rock",
+     "insignia": "Insígnia Penhasco",
+     "tm": "rock-tomb",
+     "premio_base": 100,
+     "sprite": [
+      "grant"
+     ],
+     "time": [
+      {
+       "num": 698,
+       "nivel": 25
+      },
+      {
+       "num": 696,
+       "nivel": 25
+      }
+     ]
+    },
+    {
+     "id": "korrina",
+     "nome": "Korrina",
+     "cidade": "Shalour",
+     "tipo": "fighting",
+     "insignia": "Insígnia Estrondo",
+     "tm": "power-up-punch",
+     "premio_base": 100,
+     "sprite": [
+      "korrina"
+     ],
+     "time": [
+      {
+       "num": 619,
+       "nivel": 29
+      },
+      {
+       "num": 67,
+       "nivel": 28
+      },
+      {
+       "num": 701,
+       "nivel": 32
+      }
+     ]
+    },
+    {
+     "id": "ramos",
+     "nome": "Ramos",
+     "cidade": "Coumarine",
+     "tipo": "grass",
+     "insignia": "Insígnia Planta",
+     "tm": "grass-knot",
+     "premio_base": 100,
+     "sprite": [
+      "ramos"
+     ],
+     "time": [
+      {
+       "num": 189,
+       "nivel": 30
+      },
+      {
+       "num": 70,
+       "nivel": 31
+      },
+      {
+       "num": 673,
+       "nivel": 34
+      }
+     ]
+    },
+    {
+     "id": "clemont",
+     "nome": "Clemont",
+     "cidade": "Lumiose",
+     "tipo": "electric",
+     "insignia": "Insígnia Voltagem",
+     "tm": "volt-switch",
+     "premio_base": 100,
+     "sprite": [
+      "clemont"
+     ],
+     "time": [
+      {
+       "num": 587,
+       "nivel": 35
+      },
+      {
+       "num": 82,
+       "nivel": 35
+      },
+      {
+       "num": 695,
+       "nivel": 37
+      }
+     ]
+    },
+    {
+     "id": "valerie",
+     "nome": "Valerie",
+     "cidade": "Laverre",
+     "tipo": "fairy",
+     "insignia": "Insígnia Fada",
+     "tm": "dazzling-gleam",
+     "premio_base": 100,
+     "sprite": [
+      "valerie"
+     ],
+     "time": [
+      {
+       "num": 303,
+       "nivel": 38
+      },
+      {
+       "num": 122,
+       "nivel": 39
+      },
+      {
+       "num": 700,
+       "nivel": 42
+      }
+     ]
+    },
+    {
+     "id": "olympia",
+     "nome": "Olympia",
+     "cidade": "Anistar",
+     "tipo": "psychic",
+     "insignia": "Insígnia Psíquica",
+     "tm": "calm-mind",
+     "premio_base": 100,
+     "sprite": [
+      "olympia"
+     ],
+     "time": [
+      {
+       "num": 561,
+       "nivel": 44
+      },
+      {
+       "num": 199,
+       "nivel": 45
+      },
+      {
+       "num": 678,
+       "nivel": 48
+      }
+     ]
+    },
+    {
+     "id": "wulfric",
+     "nome": "Wulfric",
+     "cidade": "Snowbelle",
+     "tipo": "ice",
+     "insignia": "Insígnia Iceberg",
+     "tm": "ice-beam",
+     "premio_base": 100,
+     "sprite": [
+      "wulfric"
+     ],
+     "time": [
+      {
+       "num": 460,
+       "nivel": 56
+      },
+      {
+       "num": 615,
+       "nivel": 55
+      },
+      {
+       "num": 713,
+       "nivel": 59
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "id": "malva",
+     "nome": "Malva",
+     "cidade": "",
+     "tipo": "fire",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "malva"
+     ],
+     "time": [
+      {
+       "num": 668,
+       "nivel": 63
+      },
+      {
+       "num": 324,
+       "nivel": 63
+      },
+      {
+       "num": 609,
+       "nivel": 63
+      },
+      {
+       "num": 663,
+       "nivel": 65
+      }
+     ]
+    },
+    {
+     "id": "siebold",
+     "nome": "Siebold",
+     "cidade": "",
+     "tipo": "water",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "siebold"
+     ],
+     "time": [
+      {
+       "num": 693,
+       "nivel": 63
+      },
+      {
+       "num": 130,
+       "nivel": 63
+      },
+      {
+       "num": 121,
+       "nivel": 63
+      },
+      {
+       "num": 689,
+       "nivel": 65
+      }
+     ]
+    },
+    {
+     "id": "wikstrom",
+     "nome": "Wikstrom",
+     "cidade": "",
+     "tipo": "steel",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "wikstrom"
+     ],
+     "time": [
+      {
+       "num": 707,
+       "nivel": 63
+      },
+      {
+       "num": 476,
+       "nivel": 63
+      },
+      {
+       "num": 212,
+       "nivel": 63
+      },
+      {
+       "num": 681,
+       "nivel": 65
+      }
+     ]
+    },
+    {
+     "id": "drasna",
+     "nome": "Drasna",
+     "cidade": "",
+     "tipo": "dragon",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "drasna"
+     ],
+     "time": [
+      {
+       "num": 691,
+       "nivel": 63
+      },
+      {
+       "num": 621,
+       "nivel": 63
+      },
+      {
+       "num": 334,
+       "nivel": 63
+      },
+      {
+       "num": 715,
+       "nivel": 65
+      }
+     ]
+    }
+   ],
+   "campeao": {
+    "id": "diantha",
+    "nome": "Diantha",
+    "cidade": "",
+    "tipo": "fairy",
+    "insignia": "",
+    "tm": null,
+    "premio_base": 200,
+    "sprite": [
+     "diantha"
+    ],
+    "time": [
+     {
+      "num": 701,
+      "nivel": 64
+     },
+     {
+      "num": 697,
+      "nivel": 65
+     },
+     {
+      "num": 699,
+      "nivel": 65
+     },
+     {
+      "num": 711,
+      "nivel": 65
+     },
+     {
+      "num": 706,
+      "nivel": 66
+     },
+     {
+      "num": 282,
+      "nivel": 68
+     }
+    ]
+   },
+   "lendarios": [
+    {
+     "num": 716,
+     "nivel": 50
+    },
+    {
+     "num": 717,
+     "nivel": 50
+    },
+    {
+     "num": 718,
+     "nivel": 70
+    }
+   ]
+  },
+  "alola": {
+   "nome": "Alola",
+   "jogo": "Sun/Moon",
+   "selos": true,
+   "ginasios": [
+    {
+     "id": "hala",
+     "nome": "Hala",
+     "cidade": "Iki Town",
+     "tipo": "fighting",
+     "insignia": "Selo Lutador",
+     "tm": "brick-break",
+     "premio_base": 100,
+     "sprite": [
+      "hala"
+     ],
+     "time": [
+      {
+       "num": 56,
+       "nivel": 14
+      },
+      {
+       "num": 296,
+       "nivel": 14
+      },
+      {
+       "num": 739,
+       "nivel": 15
+      }
+     ]
+    },
+    {
+     "id": "lana",
+     "nome": "Lana",
+     "cidade": "Brooklet Hill",
+     "tipo": "water",
+     "insignia": "Selo Água",
+     "tm": "scald",
+     "premio_base": 100,
+     "sprite": [
+      "lana"
+     ],
+     "time": [
+      {
+       "num": 594,
+       "nivel": 20
+      },
+      {
+       "num": 746,
+       "nivel": 20
+      }
+     ]
+    },
+    {
+     "id": "kiawe",
+     "nome": "Kiawe",
+     "cidade": "Wela Volcano",
+     "tipo": "fire",
+     "insignia": "Selo Fogo",
+     "tm": "flame-charge",
+     "premio_base": 100,
+     "sprite": [
+      "kiawe"
+     ],
+     "time": [
+      {
+       "num": 757,
+       "nivel": 22
+      },
+      {
+       "num": 758,
+       "nivel": 22
+      }
+     ]
+    },
+    {
+     "id": "mallow",
+     "nome": "Mallow",
+     "cidade": "Lush Jungle",
+     "tipo": "grass",
+     "insignia": "Selo Planta",
+     "tm": "bullet-seed",
+     "premio_base": 100,
+     "sprite": [
+      "mallow"
+     ],
+     "time": [
+      {
+       "num": 753,
+       "nivel": 24
+      },
+      {
+       "num": 754,
+       "nivel": 24
+      }
+     ]
+    },
+    {
+     "id": "olivia",
+     "nome": "Olivia",
+     "cidade": "Konikoni",
+     "tipo": "rock",
+     "insignia": "Selo Pedra",
+     "tm": "stone-edge",
+     "premio_base": 100,
+     "sprite": [
+      "olivia"
+     ],
+     "time": [
+      {
+       "num": 299,
+       "nivel": 26
+      },
+      {
+       "num": 525,
+       "nivel": 26
+      },
+      {
+       "num": 745,
+       "nivel": 27
+      }
+     ]
+    },
+    {
+     "id": "sophocles",
+     "nome": "Sophocles",
+     "cidade": "Hokulani",
+     "tipo": "electric",
+     "insignia": "Selo Elétrico",
+     "tm": "volt-switch",
+     "premio_base": 100,
+     "sprite": [
+      "sophocles"
+     ],
+     "time": [
+      {
+       "num": 737,
+       "nivel": 29
+      },
+      {
+       "num": 738,
+       "nivel": 29
+      }
+     ]
+    },
+    {
+     "id": "nanu",
+     "nome": "Nanu",
+     "cidade": "Malie",
+     "tipo": "dark",
+     "insignia": "Selo Sombrio",
+     "tm": "snarl",
+     "premio_base": 100,
+     "sprite": [
+      "nanu"
+     ],
+     "time": [
+      {
+       "num": 302,
+       "nivel": 38
+      },
+      {
+       "num": 552,
+       "nivel": 38
+      },
+      {
+       "num": 53,
+       "nivel": 39
+      }
+     ]
+    },
+    {
+     "id": "hapu",
+     "nome": "Hapu",
+     "cidade": "Vast Poni",
+     "tipo": "ground",
+     "insignia": "Selo Terra",
+     "tm": "bulldoze",
+     "premio_base": 100,
+     "sprite": [
+      "hapu"
+     ],
+     "time": [
+      {
+       "num": 51,
+       "nivel": 47
+      },
+      {
+       "num": 423,
+       "nivel": 47
+      },
+      {
+       "num": 330,
+       "nivel": 47
+      },
+      {
+       "num": 750,
+       "nivel": 48
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "id": "hala",
+     "nome": "Hala",
+     "cidade": "",
+     "tipo": "fighting",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "hala"
+     ],
+     "time": [
+      {
+       "num": 297,
+       "nivel": 54
+      },
+      {
+       "num": 57,
+       "nivel": 54
+      },
+      {
+       "num": 760,
+       "nivel": 54
+      },
+      {
+       "num": 62,
+       "nivel": 54
+      },
+      {
+       "num": 740,
+       "nivel": 55
+      }
+     ]
+    },
+    {
+     "id": "olivia",
+     "nome": "Olivia",
+     "cidade": "",
+     "tipo": "rock",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "olivia"
+     ],
+     "time": [
+      {
+       "num": 369,
+       "nivel": 54
+      },
+      {
+       "num": 703,
+       "nivel": 54
+      },
+      {
+       "num": 76,
+       "nivel": 54
+      },
+      {
+       "num": 476,
+       "nivel": 54
+      },
+      {
+       "num": 745,
+       "nivel": 55
+      }
+     ]
+    },
+    {
+     "id": "acerola",
+     "nome": "Acerola",
+     "cidade": "",
+     "tipo": "ghost",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "acerola"
+     ],
+     "time": [
+      {
+       "num": 302,
+       "nivel": 54
+      },
+      {
+       "num": 426,
+       "nivel": 54
+      },
+      {
+       "num": 781,
+       "nivel": 54
+      },
+      {
+       "num": 478,
+       "nivel": 54
+      },
+      {
+       "num": 770,
+       "nivel": 55
+      }
+     ]
+    },
+    {
+     "id": "kahili",
+     "nome": "Kahili",
+     "cidade": "",
+     "tipo": "flying",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "kahili"
+     ],
+     "time": [
+      {
+       "num": 227,
+       "nivel": 54
+      },
+      {
+       "num": 169,
+       "nivel": 54
+      },
+      {
+       "num": 741,
+       "nivel": 54
+      },
+      {
+       "num": 630,
+       "nivel": 54
+      },
+      {
+       "num": 733,
+       "nivel": 55
+      }
+     ]
+    }
+   ],
+   "campeao": {
+    "id": "kukui",
+    "nome": "Kukui",
+    "cidade": "",
+    "tipo": "normal",
+    "insignia": "",
+    "tm": null,
+    "premio_base": 200,
+    "sprite": [
+     "kukui"
+    ],
+    "time": [
+     {
+      "num": 745,
+      "nivel": 57
+     },
+     {
+      "num": 38,
+      "nivel": 56
+     },
+     {
+      "num": 628,
+      "nivel": 56
+     },
+     {
+      "num": 462,
+      "nivel": 56
+     },
+     {
+      "num": 143,
+      "nivel": 56
+     },
+     {
+      "num": 727,
+      "nivel": 58
+     }
+    ]
+   },
+   "lendarios": [
+    {
+     "num": 785,
+     "nivel": 60
+    },
+    {
+     "num": 786,
+     "nivel": 60
+    },
+    {
+     "num": 787,
+     "nivel": 60
+    },
+    {
+     "num": 788,
+     "nivel": 60
+    },
+    {
+     "num": 791,
+     "nivel": 55
+    },
+    {
+     "num": 792,
+     "nivel": 55
+    }
+   ]
+  },
+  "galar": {
+   "nome": "Galar",
+   "jogo": "Sword/Shield",
+   "ginasios": [
+    {
+     "id": "milo",
+     "nome": "Milo",
+     "cidade": "Turffield",
+     "tipo": "grass",
+     "insignia": "Insígnia Planta",
+     "tm": "magical-leaf",
+     "premio_base": 100,
+     "sprite": [
+      "milo"
+     ],
+     "time": [
+      {
+       "num": 829,
+       "nivel": 19
+      },
+      {
+       "num": 830,
+       "nivel": 20
+      }
+     ]
+    },
+    {
+     "id": "nessa",
+     "nome": "Nessa",
+     "cidade": "Hulbury",
+     "tipo": "water",
+     "insignia": "Insígnia Água",
+     "tm": "brine",
+     "premio_base": 100,
+     "sprite": [
+      "nessa"
+     ],
+     "time": [
+      {
+       "num": 118,
+       "nivel": 22
+      },
+      {
+       "num": 846,
+       "nivel": 23
+      },
+      {
+       "num": 834,
+       "nivel": 24
+      }
+     ]
+    },
+    {
+     "id": "kabu",
+     "nome": "Kabu",
+     "cidade": "Motostoke",
+     "tipo": "fire",
+     "insignia": "Insígnia Fogo",
+     "tm": "flame-charge",
+     "premio_base": 100,
+     "sprite": [
+      "kabu"
+     ],
+     "time": [
+      {
+       "num": 38,
+       "nivel": 25
+      },
+      {
+       "num": 59,
+       "nivel": 25
+      },
+      {
+       "num": 851,
+       "nivel": 27
+      }
+     ]
+    },
+    {
+     "id": "bea",
+     "nome": "Bea",
+     "cidade": "Stow-on-Side",
+     "tipo": "fighting",
+     "insignia": "Insígnia Lutador",
+     "tm": "brick-break",
+     "premio_base": 100,
+     "sprite": [
+      "bea"
+     ],
+     "time": [
+      {
+       "num": 237,
+       "nivel": 34
+      },
+      {
+       "num": 675,
+       "nivel": 34
+      },
+      {
+       "num": 865,
+       "nivel": 35
+      },
+      {
+       "num": 68,
+       "nivel": 36
+      }
+     ]
+    },
+    {
+     "id": "opal",
+     "nome": "Opal",
+     "cidade": "Ballonlea",
+     "tipo": "fairy",
+     "insignia": "Insígnia Fada",
+     "tm": "draining-kiss",
+     "premio_base": 100,
+     "sprite": [
+      "opal"
+     ],
+     "time": [
+      {
+       "num": 110,
+       "nivel": 36
+      },
+      {
+       "num": 303,
+       "nivel": 36
+      },
+      {
+       "num": 468,
+       "nivel": 37
+      },
+      {
+       "num": 869,
+       "nivel": 38
+      }
+     ]
+    },
+    {
+     "id": "gordie",
+     "nome": "Gordie",
+     "cidade": "Circhester",
+     "tipo": "rock",
+     "insignia": "Insígnia Pedra",
+     "tm": "rock-slide",
+     "premio_base": 100,
+     "sprite": [
+      "gordie"
+     ],
+     "time": [
+      {
+       "num": 689,
+       "nivel": 40
+      },
+      {
+       "num": 213,
+       "nivel": 40
+      },
+      {
+       "num": 874,
+       "nivel": 41
+      },
+      {
+       "num": 839,
+       "nivel": 42
+      }
+     ]
+    },
+    {
+     "id": "piers",
+     "nome": "Piers",
+     "cidade": "Spikemuth",
+     "tipo": "dark",
+     "insignia": "Insígnia Sombria",
+     "tm": "snarl",
+     "premio_base": 100,
+     "sprite": [
+      "piers"
+     ],
+     "time": [
+      {
+       "num": 560,
+       "nivel": 44
+      },
+      {
+       "num": 687,
+       "nivel": 45
+      },
+      {
+       "num": 435,
+       "nivel": 45
+      },
+      {
+       "num": 862,
+       "nivel": 46
+      }
+     ]
+    },
+    {
+     "id": "raihan",
+     "nome": "Raihan",
+     "cidade": "Hammerlocke",
+     "tipo": "dragon",
+     "insignia": "Insígnia Dragão",
+     "tm": "dragon-pulse",
+     "premio_base": 100,
+     "sprite": [
+      "raihan"
+     ],
+     "time": [
+      {
+       "num": 526,
+       "nivel": 46
+      },
+      {
+       "num": 330,
+       "nivel": 47
+      },
+      {
+       "num": 844,
+       "nivel": 46
+      },
+      {
+       "num": 884,
+       "nivel": 48
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "id": "marnie",
+     "nome": "Marnie",
+     "cidade": "",
+     "tipo": "dark",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "marnie"
+     ],
+     "time": [
+      {
+       "num": 510,
+       "nivel": 50
+      },
+      {
+       "num": 454,
+       "nivel": 50
+      },
+      {
+       "num": 560,
+       "nivel": 51
+      },
+      {
+       "num": 877,
+       "nivel": 52
+      },
+      {
+       "num": 861,
+       "nivel": 53
+      }
+     ]
+    },
+    {
+     "id": "hop",
+     "nome": "Hop",
+     "cidade": "",
+     "tipo": "normal",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "hop"
+     ],
+     "time": [
+      {
+       "num": 832,
+       "nivel": 52
+      },
+      {
+       "num": 823,
+       "nivel": 52
+      },
+      {
+       "num": 871,
+       "nivel": 51
+      },
+      {
+       "num": 143,
+       "nivel": 51
+      },
+      {
+       "num": 812,
+       "nivel": 54
+      }
+     ]
+    },
+    {
+     "id": "bede",
+     "nome": "Bede",
+     "cidade": "",
+     "tipo": "fairy",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "bede"
+     ],
+     "time": [
+      {
+       "num": 303,
+       "nivel": 53
+      },
+      {
+       "num": 282,
+       "nivel": 53
+      },
+      {
+       "num": 78,
+       "nivel": 53
+      },
+      {
+       "num": 858,
+       "nivel": 55
+      }
+     ]
+    },
+    {
+     "id": "raihan2",
+     "nome": "Raihan",
+     "cidade": "",
+     "tipo": "dragon",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "raihan"
+     ],
+     "time": [
+      {
+       "num": 526,
+       "nivel": 56
+      },
+      {
+       "num": 330,
+       "nivel": 56
+      },
+      {
+       "num": 844,
+       "nivel": 56
+      },
+      {
+       "num": 884,
+       "nivel": 58
+      }
+     ]
+    }
+   ],
+   "campeao": {
+    "id": "leon",
+    "nome": "Leon",
+    "cidade": "",
+    "tipo": "fire",
+    "insignia": "",
+    "tm": null,
+    "premio_base": 200,
+    "sprite": [
+     "leon"
+    ],
+    "time": [
+     {
+      "num": 681,
+      "nivel": 62
+     },
+     {
+      "num": 887,
+      "nivel": 62
+     },
+     {
+      "num": 612,
+      "nivel": 63
+     },
+     {
+      "num": 537,
+      "nivel": 64
+     },
+     {
+      "num": 866,
+      "nivel": 64
+     },
+     {
+      "num": 6,
+      "nivel": 65
+     }
+    ]
+   },
+   "lendarios": [
+    {
+     "num": 888,
+     "nivel": 70
+    },
+    {
+     "num": 889,
+     "nivel": 70
+    },
+    {
+     "num": 890,
+     "nivel": 60
+    },
+    {
+     "num": 894,
+     "nivel": 70
+    },
+    {
+     "num": 895,
+     "nivel": 70
+    }
+   ]
+  },
+  "paldea": {
+   "nome": "Paldea",
+   "jogo": "Scarlet/Violet",
+   "ginasios": [
+    {
+     "id": "katy",
+     "nome": "Katy",
+     "cidade": "Cortondo",
+     "tipo": "bug",
+     "insignia": "Insígnia Inseto",
+     "tm": "pounce",
+     "premio_base": 100,
+     "sprite": [
+      "katy"
+     ],
+     "time": [
+      {
+       "num": 919,
+       "nivel": 14
+      },
+      {
+       "num": 917,
+       "nivel": 14
+      },
+      {
+       "num": 216,
+       "nivel": 15
+      }
+     ]
+    },
+    {
+     "id": "brassius",
+     "nome": "Brassius",
+     "cidade": "Artazon",
+     "tipo": "grass",
+     "insignia": "Insígnia Planta",
+     "tm": "trailblaze",
+     "premio_base": 100,
+     "sprite": [
+      "brassius"
+     ],
+     "time": [
+      {
+       "num": 548,
+       "nivel": 16
+      },
+      {
+       "num": 928,
+       "nivel": 16
+      },
+      {
+       "num": 185,
+       "nivel": 17
+      }
+     ]
+    },
+    {
+     "id": "iono",
+     "nome": "Iono",
+     "cidade": "Levincia",
+     "tipo": "electric",
+     "insignia": "Insígnia Elétrica",
+     "tm": "charge-beam",
+     "premio_base": 100,
+     "sprite": [
+      "iono"
+     ],
+     "time": [
+      {
+       "num": 940,
+       "nivel": 23
+      },
+      {
+       "num": 939,
+       "nivel": 23
+      },
+      {
+       "num": 404,
+       "nivel": 23
+      },
+      {
+       "num": 429,
+       "nivel": 24
+      }
+     ]
+    },
+    {
+     "id": "kofu",
+     "nome": "Kofu",
+     "cidade": "Cascarrafa",
+     "tipo": "water",
+     "insignia": "Insígnia Água",
+     "tm": "chilling-water",
+     "premio_base": 100,
+     "sprite": [
+      "kofu"
+     ],
+     "time": [
+      {
+       "num": 976,
+       "nivel": 29
+      },
+      {
+       "num": 961,
+       "nivel": 29
+      },
+      {
+       "num": 740,
+       "nivel": 30
+      }
+     ]
+    },
+    {
+     "id": "larry",
+     "nome": "Larry",
+     "cidade": "Medali",
+     "tipo": "normal",
+     "insignia": "Insígnia Normal",
+     "tm": "facade",
+     "premio_base": 100,
+     "sprite": [
+      "larry"
+     ],
+     "time": [
+      {
+       "num": 775,
+       "nivel": 35
+      },
+      {
+       "num": 982,
+       "nivel": 35
+      },
+      {
+       "num": 398,
+       "nivel": 36
+      }
+     ]
+    },
+    {
+     "id": "ryme",
+     "nome": "Ryme",
+     "cidade": "Montenevera",
+     "tipo": "ghost",
+     "insignia": "Insígnia Fantasma",
+     "tm": "hex",
+     "premio_base": 100,
+     "sprite": [
+      "ryme"
+     ],
+     "time": [
+      {
+       "num": 354,
+       "nivel": 41
+      },
+      {
+       "num": 778,
+       "nivel": 41
+      },
+      {
+       "num": 972,
+       "nivel": 41
+      },
+      {
+       "num": 849,
+       "nivel": 42
+      }
+     ]
+    },
+    {
+     "id": "tulip",
+     "nome": "Tulip",
+     "cidade": "Alfornada",
+     "tipo": "psychic",
+     "insignia": "Insígnia Psíquica",
+     "tm": "psychic",
+     "premio_base": 100,
+     "sprite": [
+      "tulip"
+     ],
+     "time": [
+      {
+       "num": 981,
+       "nivel": 44
+      },
+      {
+       "num": 282,
+       "nivel": 44
+      },
+      {
+       "num": 956,
+       "nivel": 44
+      },
+      {
+       "num": 671,
+       "nivel": 45
+      }
+     ]
+    },
+    {
+     "id": "grusha",
+     "nome": "Grusha",
+     "cidade": "Glaseado",
+     "tipo": "ice",
+     "insignia": "Insígnia Gelo",
+     "tm": "ice-spinner",
+     "premio_base": 100,
+     "sprite": [
+      "grusha"
+     ],
+     "time": [
+      {
+       "num": 873,
+       "nivel": 47
+      },
+      {
+       "num": 614,
+       "nivel": 47
+      },
+      {
+       "num": 975,
+       "nivel": 47
+      },
+      {
+       "num": 334,
+       "nivel": 48
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "id": "rika",
+     "nome": "Rika",
+     "cidade": "",
+     "tipo": "ground",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "rika"
+     ],
+     "time": [
+      {
+       "num": 340,
+       "nivel": 57
+      },
+      {
+       "num": 323,
+       "nivel": 57
+      },
+      {
+       "num": 232,
+       "nivel": 57
+      },
+      {
+       "num": 51,
+       "nivel": 57
+      },
+      {
+       "num": 980,
+       "nivel": 58
+      }
+     ]
+    },
+    {
+     "id": "poppy",
+     "nome": "Poppy",
+     "cidade": "",
+     "tipo": "steel",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "poppy"
+     ],
+     "time": [
+      {
+       "num": 879,
+       "nivel": 58
+      },
+      {
+       "num": 462,
+       "nivel": 58
+      },
+      {
+       "num": 437,
+       "nivel": 58
+      },
+      {
+       "num": 823,
+       "nivel": 58
+      },
+      {
+       "num": 959,
+       "nivel": 59
+      }
+     ]
+    },
+    {
+     "id": "larry2",
+     "nome": "Larry",
+     "cidade": "",
+     "tipo": "flying",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "larry"
+     ],
+     "time": [
+      {
+       "num": 357,
+       "nivel": 59
+      },
+      {
+       "num": 741,
+       "nivel": 59
+      },
+      {
+       "num": 334,
+       "nivel": 59
+      },
+      {
+       "num": 398,
+       "nivel": 59
+      },
+      {
+       "num": 973,
+       "nivel": 60
+      }
+     ]
+    },
+    {
+     "id": "hassel",
+     "nome": "Hassel",
+     "cidade": "",
+     "tipo": "dragon",
+     "insignia": "",
+     "tm": null,
+     "premio_base": 120,
+     "sprite": [
+      "hassel"
+     ],
+     "time": [
+      {
+       "num": 715,
+       "nivel": 60
+      },
+      {
+       "num": 612,
+       "nivel": 60
+      },
+      {
+       "num": 691,
+       "nivel": 60
+      },
+      {
+       "num": 841,
+       "nivel": 60
+      },
+      {
+       "num": 998,
+       "nivel": 61
+      }
+     ]
+    }
+   ],
+   "campeao": {
+    "id": "geeta",
+    "nome": "Geeta",
+    "cidade": "",
+    "tipo": "rock",
+    "insignia": "",
+    "tm": null,
+    "premio_base": 200,
+    "sprite": [
+     "geeta"
+    ],
+    "time": [
+     {
+      "num": 956,
+      "nivel": 61
+     },
+     {
+      "num": 673,
+      "nivel": 61
+     },
+     {
+      "num": 976,
+      "nivel": 61
+     },
+     {
+      "num": 713,
+      "nivel": 61
+     },
+     {
+      "num": 983,
+      "nivel": 61
+     },
+     {
+      "num": 970,
+      "nivel": 62
+     }
+    ]
+   },
+   "lendarios": [
+    {
+     "num": 1001,
+     "nivel": 60
+    },
+    {
+     "num": 1002,
+     "nivel": 60
+    },
+    {
+     "num": 1003,
+     "nivel": 60
+    },
+    {
+     "num": 1004,
+     "nivel": 60
+    },
+    {
+     "num": 1007,
+     "nivel": 72
+    },
+    {
+     "num": 1008,
+     "nivel": 72
+    }
+   ]
+  }
+ }
+}

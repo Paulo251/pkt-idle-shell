@@ -1,0 +1,3 @@
+# Pacotes do AUR (instalados com paru ou yay)
+python-pywal
+wl_shimeji-git

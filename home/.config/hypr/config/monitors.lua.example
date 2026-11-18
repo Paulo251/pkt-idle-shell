@@ -1,0 +1,10 @@
+-- Copiado para monitors.lua pelo install.sh, que preenche o monitor desta máquina.
+-- Veja os nomes com: hyprctl monitors
+MONITOR1 = "DP-1"
+
+hl.monitor({
+    output   = MONITOR1,
+    mode     = "preferred",
+    position = "0x0",
+    scale    = "1",
+})
