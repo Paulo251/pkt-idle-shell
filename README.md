@@ -65,7 +65,7 @@ Wins earn Battle Points for evolution items and strong TMs. The **Records** scre
 
 ## Requirements
 
-- Arch Linux or an Arch-based distribution, such as CachyOS
+- Arch Linux or an Arch-based distribution
 - Hyprland with Lua configuration support
 - SSH access to this private repository
 - `paru` or `yay` for AUR packages
